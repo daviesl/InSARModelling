@@ -1,0 +1,112 @@
+\title{var\_res\_py : Python-based variable/ quad-tree resampler}
+\author{Piyush Agram \\
+	Romain Jolivet \\
+	Seismological Laboratory \\
+	Caltech}
+\date{\today}
+\documentclass[12pt]{article}
+\usepackage{verbatim}
+
+\begin{document}
+\maketitle
+
+{\bf var\_res\_py} is a python implementation of the variable sampler originally written in MATLAB by Mark Simons and Yuri Fialko. Few new improvements include an approximate covariance matrix for the resampled data.
+
+\section{Usage}
+{\bf prepmodel.py} represents the driver script to the package and can be used with the following options. All the inputs included in $[\cdot]$ are optional.
+\begin{verbatim}
+> prepmodel.py data.unw los.unw outfile thresh [method] [nseg] 
+\end{verbatim}
+\begin{verbatim}
+[scl] [plot] [covar] [maxsize]
+\end{verbatim}
+The inputs to the program are
+\begin{description}
+\item[data.unw] The geo-coded unwrapped file in RMG format produced by ROI-PAC. The corresponding resource file (data.unw.rsc) should also be located in the same directory. 
+\item[los.unw]   The geometry file in two possible formats - (Look Angle, Azimuth) in RMG format or (E,N,U) look vectors in inter-leaved format. More formats can be easily included by modifying the {\bf load\_S} module in {\bf loaddata.py}. Optionally, if one is not interested in the geometry outputs this can be set to {\bf N}. If the detailed geometry is not available and one is interested in using an estimate of the LOS vector, this input can be set to {\bf D}. If using azimuth offsets, set this flag to {\bf A}.
+\item[outfile] This represents the prefix of the output files. The resampled data will be written to {\bf outfile.txt} and the estimate of the covariance matrix to a binary float-32 file called {\bf outfile.cov}.
+\item[thresh] This number represents the threshold for the standard deviation of pixels in each box. If the standard deviation of pixels in a box does not exceed the threshold, it is no longer decomposed into smaller data units. Threshold represents the standard deviation of the observations in {\bf cm}.
+\item[method] This is the method used to estimate the standard deviation in a box. {\bf CURV} takes into account the local curvature and slope in each box before estimating the standard deviation and {\bf VAR} directly computes the standard deviation. If not set, {\bf CURV} is assumed.
+\item[nseg] The code has been designed to ideally work on images that are almost square. If multiple frames are stitched together for a combined analysis, {\bf nseg} should be set to the number of frames. It represents the number of vertical frames, the data will be segmented into before processing. If not set, assumed to be 1.
+\item[scl] Decides the scaling of the input data set. Can be {\bf Y} for regular unwrapped phase data, {\bf N} if the data is already in cm and {\bf M} if the input data is in meters. Note that the threshold will be applied after scaling the input data. If not set, assumed to be {\bf Y}.
+\item[plot] Plotflag to be set to either Y or N. Use pyplot utilities to display the discrepancy between the original and resampled data set. If the covariance estimation flag is also set, the fit for covariance estimation and the estimate of covariance matrix are also displayed. If not set, assumed to be {\bf Y}.
+\item[covar] Covarflag to be set to either Y or N. An estimate of the covariance matrix is computed by randomly sampling data and using a scipy curve\_fit module. The atmospheric covariance function is assumed to be 
+\begin{equation}
+C_{ij} = \sigma^2 \cdot \exp\left(-d_{ij}/\lambda\right)
+\end{equation}
+where $C_{ij}$ represents the covariance of $i^{th}$ and $j^{th}$ pixels and $d_{ij}$ represents the distance between them. If not set assumed to be N.
+\item[maxsize] maxsize sets the maximum size of the box. This way in areas where phase does not vary a lot, one can have a regular sampling and a fine resolution where the curvature sampling tells you to. 
+\end{description}
+
+\section{Outputs}
+\subsection{outfile.txt}
+The primary output of the package is the resampled data points in {\bf outfile.txt}. The columns of this ASCII file includes the following header:
+\begin{verbatim}
+Number xind yind east north data err wgt Elos Nlos Ulos
+********************************************************
+\end{verbatim}
+
+\begin{description}
+\item[Number] Index number of the sample.
+\item[xind] Column index of the sample in the image.
+\item[yind] Row index of the sample in the image (Flipped for increasing lat values).
+\item[east] East co-ordinate corresponding to {\bf xind}.
+\item[north] North co-ordinate corresponding to {\bf yind}.
+\item[data] Data corresponding to the sample in cm.
+\item[err] Std. deviation of data in the box corresponding to the sample.
+\item[wgt] Number of pixels included in the box corresponding to the sample.
+\item[Elos] Component of LOS unit vector in East direction. Set to zero if {\bf los.unw $==$ N}
+\item[Nlos] Component of LOS unit vector in North direction.
+\item[Ulos] Component of LOS unit vector in Up direction.
+\end{description}
+
+\subsection{outfile.rsp}
+This file lists the coordinates of the upper-left and down-right corners of the box containing the pixels used to compute each value given in the output.txt file. This file is needed to run SameResampAs.py. The columns of this ASCII file includes the following header:
+\begin{verbatim}
+xind yind UpperLeft-x,y DownRight-x,y
+********************************************************
+\end{verbatim}
+
+\begin{description}
+\item[xind] Column index of the sample in the image.
+\item[yind] Row index of the sample in the image (Flipped for increasing lat values).
+\item[Upper-left x] Upper-left corner column index.
+\item[Upper-left y] Upper-left corner row index.
+\item[Down-right x] Down-right corner column index.
+\item[Down-right y] Down-right corner row index.
+\end{description} 
+
+\section{Hard-coded parameters}
+There are a couple of hard coded parameters in the code.
+\begin{description}
+\item[minreslevel] Represents the largest box of data points to considered. Currently set to 2, implying the largest box is half the size of the original image. The default smallest size is $2 \times 2$ pixels.
+\item[nfrac] Currently set to 10\% in {\bf covaraps.py}. Sets the number of random data pairs as a function of non-zero data points in the original image to use for covariance parameter estimation.
+\item[flipvert] Currently set to {\bf N}. Set it to {\bf Y} if you desire the image to be vertically flipped (For compatibility with old matlab code).
+\item[scale] Distance scaling for better covariance curve fitting. Currently set to 0.001.
+\end{description}
+
+\section{Additional Routines}
+We added a few routines that you might want to check, in case you are looking for something in particular.\\
+
+\begin{center}\line(1,0){250}\end{center}
+{\bf SameResampAs.py} is a routine that has been created to resample numerous interferograms in a similar way. The user re-samples an interferogram using prepmodel.py, which creates a .rsp file. This file lists the coordinates of the pixels averaged during the re-sampling process and is used as an input to SameResampAs.py to resample any interferogram that has the same geometry.
+
+\begin{verbatim}
+> SameResampAs.py file.unw file.rsp file.txt output plot(y/n)
+\end{verbatim}
+The inputs to the program are
+\begin{description}
+\item[file.unw] Unw file you want to re-sample. It has to be in the exact same geometry as the file used to generate the rsp file (no warning are displayed if it is not the case).
+\item[file.rsp] Rsp file given by prepmodel.py.
+\item[file.txt] Txt file given by prepmodel.py.
+\item[output] Prefix of the output file.
+\item[plot(y/n)] Plots a few things Yes or No.
+\end{description}
+
+\begin{center}\line(1,0){250}\end{center}
+{\bf CheckResamp.m} is a matlab routine that provides the same plot as prepmodel.py, but the interpolation is different. You might want to modify it and check your resampling with matlab (more convenient).
+
+\end{document}
+
+
+
