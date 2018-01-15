@@ -65,10 +65,8 @@ def yangmodel(x0,y0,z0,a,A,P_G,mu,nu,theta,phi,x,y,z):
 	
 	
 	# SINGULARITIES ***********************************************************
-	if theta >= 89.99:
-		theta = 89.99                                                          # solution is singular when theta = 90 degrees
-	if A >= 0.99:
-		A = 0.99
+	#theta = np.minimum(theta, 89.99)
+	#A = np.minimum(A,0.99)
 	# *************************************************************************
 	
 	
@@ -77,8 +75,8 @@ def yangmodel(x0,y0,z0,a,A,P_G,mu,nu,theta,phi,x,y,z):
 	b = A*a                                                                    # semi-minor axis
 	clambda = 2*mu*nu/(1-2*nu)                                                  # first Lame's elatic modulus
 	P = P_G*mu                                                                 # excess pressure
-	theta = math.pi*theta/180                                                       # dip angle in rad
-	phi = math.pi*phi/180                                                           # strike angle in rad
+	theta = math.pi*theta/180.0                                                       # dip angle in rad
+	phi = math.pi*phi/180.0                                                           # strike angle in rad
 	
 	# compute 3D displacements
 	(u, v, w) = yangdisp(x0,y0,z0,a,b,clambda,mu,nu,P,theta,phi,x,y,z)
@@ -164,11 +162,12 @@ def yangpar(a,b,clambda,mu,nu,P):
 	
 	epsn = 1E-10
 	
-	c = np.sqrt(a**2-b**2)                                  # prolate ellipsoid focus [m]
-	
 	a2 = a**2
 	a3 = a**3 
 	b2 = b**2
+
+	c = np.sqrt(a2-b2)                                  # prolate ellipsoid focus [m]
+	
 	c2 = c**2 
 	c3 = c**3 
 	c4 = c**4 
@@ -299,9 +298,9 @@ def yangint(x,y,z,z0,theta,a1,b1,a,b,csi,mu,nu,Pdila):
 	F1 = 0 
 	F2 = 0 
 	
-	f1 = csi*y1/dybar3 + (3/cost**2)*(y1*sint*lybar3 - y1*lqbar3 + 2*q2*atanb) + 2*y1*lqbar3 - 4*xbar3*atanb/cost
-	f2 = csi*y2/dybar3 + (3/cost**2)*(q2*sint*lqbar3 - q2*lybar3 + 2*y1*sint*atanb + cost*(R2-ybar3)) - 2*cost*Abar2 + (2/cost)*(xbar3*lybar3 - q3*lqbar3)                      # correction after Newmann et al (2006), eq (A-9)
-	f3 = (1/cost)*(q2*lqbar3 - q2*sint*lybar3 + 2*y1*atanb) + 2*sint*Abar2 + q3*lybar3 - csi
+	f1 = csi*y1/dybar3 + (3.0/cost**2)*(y1*sint*lybar3 - y1*lqbar3 + 2*q2*atanb) + 2*y1*lqbar3 - 4*xbar3*atanb/cost
+	f2 = csi*y2/dybar3 + (3.0/cost**2)*(q2*sint*lqbar3 - q2*lybar3 + 2*y1*sint*atanb + cost*(R2-ybar3)) - 2*cost*Abar2 + (2.0/cost)*(xbar3*lybar3 - q3*lqbar3)                      # correction after Newmann et al (2006), eq (A-9)
+	f3 = (1.0/cost)*(q2*lqbar3 - q2*sint*lybar3 + 2*y1*atanb) + 2*sint*Abar2 + q3*lybar3 - csi
 	
 	
 	# precalculate coefficients that are used often

@@ -103,8 +103,15 @@ class gamma_reader:
         else:
             self.cor = cor
 
-    def mask_igram_by_threshold(self,ct):
-        self.phs[self.cor < ct] = np.nan
+    def mask_igram_by_threshold(self,ct,ref=2):
+        #self.phs[self.cor < ct] = np.nan
+	mask = np.full_like(self.phs,1)
+	mask[self.cor < ct] = 0
+        import island
+        c = island.Counter()
+        c.numIslands(mask)
+        maxisland = c.maxIsland()
+        self.phs[c.grid!=maxisland] = np.nan
 
     def read_igram(self, scale=True, flip=False, mult=1.0):
         fact = np.choose(scale,[1.0,self.wvl/(4*np.pi)])

@@ -6,18 +6,25 @@ import scipy
 from scipy import interpolate
 from scipy import signal
 import math
+import theano
 import theano.tensor as T
 import seaborn as sns
 from tempfile import mkdtemp
+
+#solver='MAPNUTS'
+solver='SMC'
+
+#theano.config.mode='FAST_COMPILE'
+theano.config.int_division='raise'
 
 test_folder = mkdtemp(prefix='SMCT')
 
 # Headers:
 # Number xind yind east north data err wgt Elos Nlos Ulos
 # east/north are actually lon and lat
-T025D = np.loadtxt('T025D_utm.txt',skiprows=2)
-T130A = np.loadtxt('T130A_utm.txt',skiprows=2)
-T131A = np.loadtxt('T131A_utm.txt',skiprows=2)
+T025D = np.loadtxt('T025D_utme.txt',skiprows=2)
+T130A = np.loadtxt('T130A_utme.txt',skiprows=2)
+T131A = np.loadtxt('T131A_utme.txt',skiprows=2)
 
 # convert cm to m for los values and set minimum error to 0.01
 T025D[:,5] *= 0.01
@@ -168,7 +175,16 @@ with basic_model:
 	x0 = pm.Uniform('x0',ldE-hstd,ldE+hstd,transform=None)
 	y0 = pm.Uniform('y0',ldN-hstd,ldN+hstd,transform=None)
 	z0 = pm.Uniform('z0',0,3000,transform=None)
-	dV = pm.Uniform('dV',0,5e6,transform=None)
+	semimajor = pm.Uniform('semimajor',0,5e2,transform=None)
+	aspectratio = pm.Uniform('aspectratio',0.01,0.99,transform=None)
+	DP_mu = pm.Uniform('DP_mu',0,1e3,transform=None)
+	mu = pm.Uniform('mu',1e10,1e11,transform=None)
+	nu = pm.Uniform('nu',0.2,0.3,transform=None)
+	theta = pm.Uniform('theta',0,89.99,transform=None)
+	phi = pm.Uniform('phi',0,359.99,transform=None)
+	#theta = 0 #89.999
+	#mu = theano.shared(2500**3)
+	#nu = theano.shared(0.25)
 
 	def mogiDEM(x0_,y0_,z0_,dV_,x,y,dem):
 		"""evaluate a single Mogi peak over a 2D (2 by N) numpy array of evalpts, where coeffs = (x0,y0,z0,dV)"""
@@ -186,75 +202,70 @@ with basic_model:
 		
 	from yang import *
 
-	def synthetic1(x0_,y0_,z0_,dV_):
-		(T025D_dE, T025D_dN, T025D_dZ) = mogiDEM(x0_,y0_,z0_,dV_,T025D_E_utm,T025D_N_utm,dem_T025D)
+	def synthetic1(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_):
+		(T025D_dE, T025D_dN, T025D_dZ) = yangmodel(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_,T025D_E_utm,T025D_N_utm,dem_T025D)
 		#T025D_dE_p = T.printing.Print('T025D_dE')(T025D_dE)
 		return (((((T025D[:,8]*T025D_dE + T025D[:,9]*T025D_dN + T025D[:,10]*T025D_dZ) - T025D[:,5]) / T025D[:,6])**2).sum())
 		
-	def synthetic2(x0_,y0_,z0_,dV_):
-		(T131A_dE, T131A_dN, T131A_dZ) = mogiDEM(x0_,y0_,z0_,dV_,T131A_E_utm,T131A_N_utm,dem_T131A)
+	def synthetic2(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_):
+		(T131A_dE, T131A_dN, T131A_dZ) = yangmodel(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_,T131A_E_utm,T131A_N_utm,dem_T131A)
 		return (((((T131A[:,8]*T131A_dE + T131A[:,9]*T131A_dN + T131A[:,10]*T131A_dZ) - T131A[:,5]) / T131A[:,6])**2).sum())
 
-	def synthetic3(x0_,y0_,z0_,dV_):
-		(T130A_dE, T130A_dN, T130A_dZ) = mogiDEM(x0_,y0_,z0_,dV_,T130A_E_utm,T130A_N_utm,dem_T130A)
+	def synthetic3(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_):
+		(T130A_dE, T130A_dN, T130A_dZ) = yangmodel(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_,T130A_E_utm,T130A_N_utm,dem_T130A)
 		#T130A_dE_p = T.printing.Print('T130A_dE')(T130A_dE)
 		#T130A_dN_p = T.printing.Print('T130A_dN')(T130A_dN)
 		#T130A_dZ_p = T.printing.Print('T130A_dZ')(T130A_dZ)
 		return (((((T130A[:,8]*T130A_dE + T130A[:,9]*T130A_dN + T130A[:,10]*T130A_dZ) - T130A[:,5]) / T130A[:,6])**2).sum())
 
-	def logp(x0_,y0_,z0_,dV_):
+	def logp(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_):
 		#return (synthetic1(x0_,y0_,z0_,dV_)+synthetic2(x0_,y0_,z0_,dV_)) * (-0.5) # for DensityDist: * (-0.5)
-		s1 = synthetic1(x0_,y0_,z0_,dV_)
+		s1 = synthetic1(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_)
 		#s1_p = T.printing.Print('s1')(s1)
-		s2 = synthetic2(x0_,y0_,z0_,dV_)
+		s2 = synthetic2(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_)
 		#s2_p = T.printing.Print('s2')(s2)
-		s3 = synthetic3(x0_,y0_,z0_,dV_)
+		s3 = synthetic3(x0_,y0_,z0_,semimajor_,aspectratio_,DP_mu_,mu_,nu_,theta_,phi_)
 		#s3_p = T.printing.Print('s3')(s3)
 		return (s1 + s2) * (-0.5) # for DensityDist: * (-0.5)
 
-	llk = pm.DensityDist('llk',logp,observed={'x0_':x0,'y0_':y0,'z0_':z0,'dV_':dV})
+	llk = pm.DensityDist('llk',logp,observed={'x0_':x0,'y0_':y0,'z0_':z0,'semimajor_':semimajor,'aspectratio_':aspectratio,'DP_mu_':DP_mu,'mu_':mu,'nu_':nu,'theta_':theta,'phi_':phi})
 	#llk = pm.Potential('llk',logp(x0,y0,z0,dV))
 
-	niter = 5000
 
-	start = pm.find_MAP(model=basic_model)
-
-	print("Maximum a-posteriori estimate:") 
-	print(start)
+	if solver=='SMC':	
+		#start = pm.find_MAP(model=basic_model)
+		#print("Maximum a-posteriori estimate:") 
+		#print(start)
+		n_chains = 256
+		n_steps = 16
+		tune_interval = 8
+		n_jobs = 1
+		trace = smc.sample_smc(
+			n_steps=n_steps,
+			n_chains=n_chains,
+			tune_interval=tune_interval,
+			n_jobs=n_jobs,
+			#start=start,
+			progressbar=True,
+			stage=0,
+			homepath=test_folder,
+			model=basic_model
+			)
+	elif solver=='MAPNUTS':
+		niter = 5000
 	
-	#n_chains = 100
-	#n_steps = 50
-	#tune_interval = 10
-	#n_jobs = 1
-	#trace = smc.sample_smc(
-	#	n_steps=n_steps,
-	#	n_chains=n_chains,
-	#	tune_interval=tune_interval,
-	#	n_jobs=n_jobs,
-	#	#start=start,
-	#	progressbar=True,
-	#	stage=0,
-	#	homepath=test_folder,
-	#	model=basic_model
-	#	)
+		# with find_MAP()
+		start = pm.find_MAP(model=basic_model)
+		print("Maximum a-posteriori estimate:") 
+		print(start)
+		step = pm.NUTS(scaling=start)
+		trace = pm.sample(niter, start = start, step = step)
 
-	#t = trace[niter//2:] # discard 50% of values
-	#print t
-	#x0_ = trace.get_values('x0',burn=niter//2, combine=True)
-
-	step = pm.NUTS(scaling=start)
-	trace = pm.sample(niter, start = start, step = step)
-
-	#step = pm.NUTS()
-	#trace = pm.sample(niter, step = step)
-
-
-	#fig, (ax1,ax2,ax3,ax4) = plt.subplots(4,1,sharex=True)
-	#ax1.plot(trace['x0'])
-	#ax2.plot(trace['y0'])
-	#ax3.plot(trace['z0'])
-	#ax4.plot(trace['dV'])
-	#plt.show()
+	elif solver=='NUTS':
+		niter = 5000
+		# Without find_MAP()
+		step = pm.NUTS()
+		trace = pm.sample(niter, step = step)
 
 	pm.traceplot(trace)
 	ax = plt.gca()
@@ -352,19 +363,26 @@ with basic_model:
 			ax.set_aspect('equal')
 		plt.show()
 
-	crediblejointplot(trace['z0'],trace['dV'],r"Depth $m$",r"Volume $m^3$",'r')
-	crediblejointplot(trace['x0'],trace['y0'],r"Easting $m$",r"Northing $m$",'g',True)
+	print trace
 
-	#sns.jointplot(x=trace['z0'],y=trace['dV'],kind='kde',color='r').set_axis_labels(r"Depth $m$",r"Volume $m^3$")
-	#sns.jointplot(x=trace['x0'],y=trace['y0'],kind='kde',color='green').set_axis_labels(r"Easting $m$",r"Northing $m$")
+	crediblejointplot(trace.get_values('z0'),trace.get_values('semimajor'),r"Depth $m$",r"Semi-major axis $m$",'r')
+	crediblejointplot(trace.get_values('z0'),trace.get_values('aspectratio'),r"Depth $m$",r"Apsect Ratio",'r')
+	crediblejointplot(trace.get_values('semimajor'),trace.get_values('aspectratio'),r"Semi-major axis $m$",r"Aspect Ratio",'r')
+	crediblejointplot(trace.get_values('z0'),trace.get_values('DP_mu'),r"Depth $m$",r"Excess Pressure",'r')
+	crediblejointplot(trace.get_values('z0'),trace.get_values('mu'),r"Depth $m$",r"Shear Modulus $Pa$",'r')
+	crediblejointplot(trace.get_values('z0'),trace.get_values('nu'),r"Depth $m$",r"Poisson's Ratio $m^3$",'r')
+	crediblejointplot(trace.get_values('x0'),trace.get_values('y0'),r"Easting $m$",r"Northing $m$",'g',True)
 
-	#sns.kdeplot(trace['x0'],trace['y0'])
+	#sns.jointplot(x=trace.get_values('z0'),y=trace.get_values('dV'),kind='kde',color='r').set_axis_labels(r"Depth $m$",r"Volume $m^3$")
+	#sns.jointplot(x=trace.get_values('x0'),y=trace.get_values('y0'),kind='kde',color='green').set_axis_labels(r"Easting $m$",r"Northing $m$")
+
+	#sns.kdeplot(trace.get_values('x0'),trace.get_values('y0'))
 	#plt.xlabel(r"Easting $m$")
 	#plt.ylabel(r"Northing $m$")
 	#plt.ticklabel_format(useOffset=False)
 	#plt.show()
 
-	#sns.kdeplot(trace['z0'],trace['dV'])
+	#sns.kdeplot(trace.get_values('z0'),trace.get_values('dV'))
 	#plt.xlabel(r"Depth $m$")
 	#plt.ylabel(r"Volume $m^3$")
 	#plt.ticklabel_format(useOffset=False)

@@ -9,9 +9,9 @@ import math
 # Headers:
 # Number xind yind east north data err wgt Elos Nlos Ulos
 # east/north are actually lon and lat
-T025D = np.loadtxt('T025D_utm.txt',skiprows=2)
-T130A = np.loadtxt('T130A_utm.txt',skiprows=2)
-T131A = np.loadtxt('T131A_utm.txt',skiprows=2)
+T025D = np.loadtxt('T025D_utme.txt',skiprows=2)
+T130A = np.loadtxt('T130A_utme.txt',skiprows=2)
+T131A = np.loadtxt('T131A_utme.txt',skiprows=2)
 
 # convert cm to m for los values and set minimum error to 0.01
 T025D[:,5] *= 0.01
@@ -159,12 +159,13 @@ T130A_E_utm, T130A_N_utm = pyproj.transform(wgs,utm,T130A[:,3],T130A[:,4])
 hstd = 1000.0 #/ (3600 * 30)
 vstd = 1500.0
 
-def mogiDEM(x0_,y0_,z0_,dV_,x,y,dem):
+def mogiDEM(x0_,y0_,z0_,radius_,x,y,dem):
 	"""evaluate a single Mogi peak over a 2D (2 by N) numpy array of evalpts, where coeffs = (x0,y0,z0,dV)"""
 	#x0,y0,z0,dV = coeffs
 	dx = x - x0_
 	dy = y - y0_
 	dz = (dem + z0_).clip(0,1e4) # max 1e4m depth
+	dV_ = 4.0/3.0 * math.pi * (radius_**3)
 	c = dV_ * 3. / (4. * math.pi)
 	# or equivalently c= (3/4) a^3 dP / rigidity
 	# where a = sphere radius, dP = delta Pressure
@@ -217,22 +218,85 @@ x0=506316.24905746605
 z0=893.939494952472
 
 semimajor = np.power(dV / (4*math.pi/3),1.0/3.0) 
-print("semimajor = ",semimajor)
-excesspressure = 3 # dimensionless excess pressure / shear modulus
+DP_mu = 3 # dimensionless excess pressure / shear modulus
 mu = (2500 ** 2) * 2500 # Vs^2 * density
 nu = 0.25
 
-(T025D_dE, T025D_dN, T025D_dZ) = yangmodel(x0,y0,z0,semimajor,1,excesspressure,mu,nu,90,0,T025D_E_utm,T025D_N_utm,dem_T025D)
+semimajor = 50.015588190175336
+DP_mu = 5.051962086133976
+theta = 44.993704312584974
+y0 = 14571952.402948132
+x0 = 506195.304077638
+z0 = 1499.999759279775
+aspectratio = 0.99 #1.4935265197066823
+
+
+x0 = 506394.425 
+y0 = 14572444.497 
+z0 = 452.465
+semimajor = 151.566
+aspectratio = 0.044
+DP_mu = 52.315
+mu = 48547815436.490 
+nu = 0.299
+theta = 71.178    
+phi = 174.278   
+
+
+x0 = 506258.499   
+y0 = 14572471.607   
+z0 = 575.095   
+semimajor = 108.572 
+aspectratio = 0.072
+DP_mu = 55.492 
+mu = 64305636318.070 
+nu = 0.219     
+theta = 71.310     
+phi = 172.936 
+
+# last Mogi
+x0= 506366.141    
+y0= 14572321.057  
+z0= 465.641 
+radius= 71.884 
+
+
+# last Yang
+
+x0 = 506387.798
+y0 = 14572395.005
+z0 = 340.288
+semimajor = 51.691
+aspectratio = 0.104
+DP_mu = 256.723
+mu = 46786837013.641
+nu = 0.300
+theta = 63.087
+phi = 191.166
+
+x0ll, y0ll = pyproj.transform(utm,wgs,x0,y0)
+
+print("semimajor = ",semimajor)
+
+modeltype='Mogi'
+
+if modeltype=='Yang':
+	(T025D_dE, T025D_dN, T025D_dZ) = yangmodel(x0,y0,z0,semimajor,aspectratio,DP_mu,mu,nu,theta,phi,T025D_E_utm,T025D_N_utm,dem_T025D)
+	(T131A_dE, T131A_dN, T131A_dZ) = yangmodel(x0,y0,z0,semimajor,aspectratio,DP_mu,mu,nu,theta,phi,T131A_E_utm,T131A_N_utm,dem_T131A)
+	(T130A_dE, T130A_dN, T130A_dZ) = yangmodel(x0,y0,z0,semimajor,aspectratio,DP_mu,mu,nu,theta,phi,T130A_E_utm,T130A_N_utm,dem_T130A)
+else:
+	(T025D_dE, T025D_dN, T025D_dZ) = mogiDEM(x0,y0,z0,radius,T025D_E_utm,T025D_N_utm,dem_T025D)
+	(T131A_dE, T131A_dN, T131A_dZ) = mogiDEM(x0,y0,z0,radius,T131A_E_utm,T131A_N_utm,dem_T131A)
+	(T130A_dE, T130A_dN, T130A_dZ) = mogiDEM(x0,y0,z0,radius,T130A_E_utm,T130A_N_utm,dem_T130A)
+
 T025D_los = (T025D[:,8]*T025D_dE + T025D[:,9]*T025D_dN + T025D[:,10]*T025D_dZ)
 T025D[:,5]
 T025D[:,6]
 		
-(T131A_dE, T131A_dN, T131A_dZ) = yangmodel(x0,y0,z0,semimajor,1,excesspressure,mu,nu,90,0,T131A_E_utm,T131A_N_utm,dem_T131A)
 T131A_los = (T131A[:,8]*T131A_dE + T131A[:,9]*T131A_dN + T131A[:,10]*T131A_dZ)
 T131A[:,5]
 T131A[:,6]
 
-(T130A_dE, T130A_dN, T130A_dZ) = yangmodel(x0,y0,z0,semimajor,1,excesspressure,mu,nu,90,0,T130A_E_utm,T130A_N_utm,dem_T130A)
 T130A_los = (T130A[:,8]*T130A_dE + T130A[:,9]*T130A_dN + T130A[:,10]*T130A_dZ)
 T130A[:,5]
 T130A[:,6]
@@ -251,12 +315,14 @@ T130A[:,6]
 #ax3d2.scatter(T025D[:,3],T025D[:,4],T025D[:,5])
 #plt.show()
 
+cormask = 0.3 # 0.15
+
 T025Dmask = np.zeros_like(T025Dcor)
-T025Dmask[T025Dcor < 0.15] = 1
+T025Dmask[T025Dcor < cormask] = 1
 T131Amask = np.zeros_like(T131Acor)
-T131Amask[T131Acor < 0.15] = 1
+T131Amask[T131Acor < cormask] = 1
 T130Amask = np.zeros_like(T130Acor)
-T130Amask[T130Acor < 0.15] = 1
+T130Amask[T130Acor < cormask] = 1
 
 from scipy.interpolate import griddata
 
@@ -307,7 +373,7 @@ def plot_varres(ax,par,x,y,v,size,mask=None,vmin=-0.36,vmax=0.2,cmap='gist_rainb
 
 def plot_varres_scatter(ax,par,x,y,v,size,mask=None,vmin=-0.36,vmax=0.36,cmap='gist_rainbow_r'):
 	axisformatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
-	cax = ax.scatter(x,y,s=1.5,c=v,marker=(0,3,0),linewidth=0,vmin=vmin,vmax=vmax,cmap=cmap) # s=<markersize>
+	cax = ax.scatter(x,y,s=8.0,c=v,marker=(0,3,0),linewidth=0,vmin=vmin,vmax=vmax,cmap=cmap) # s=<markersize>
 	ax.yaxis.set_major_formatter(axisformatter)
 	ax.xaxis.set_major_formatter(axisformatter)
 	for tick in ax.get_xticklabels():
@@ -318,41 +384,56 @@ fig = plt.figure()
 
 pad=5
 
+#diff1 = np.absolute((T025D_los - T025D[:,5])/T025D[:,6])
+diff1 = np.absolute((T025D_los - T025D[:,5]))
+#diff2 = np.absolute((T131A_los - T131A[:,5])/T131A[:,6])
+diff2 = np.absolute((T131A_los - T131A[:,5]))
+#diff3 = np.absolute((T130A_los - T130A[:,5])/T130A[:,6])
+diff3 = np.absolute((T130A_los - T130A[:,5]))
+maxdiff = max(diff1.max(),diff2.max(),diff3.max())
+
 ax1 = fig.add_subplot(331,axisbg='black')
 ax1.annotate("T025D",xy=(0.5,1),xytext=(0,pad),xycoords='axes fraction', textcoords='offset points',size='large', ha='center', va='baseline')
 ax1.annotate("Synthetic LOS", xy=(0, 0.5), xytext=(-ax1.yaxis.labelpad - pad, 0),xycoords=ax1.yaxis.label, textcoords='offset points',size='large', ha='right', va='center')
 
 plot_varres_scatter(ax1,par_D,T025D[:,3],T025D[:,4],T025D_los,7.5,cmap='gist_rainbow_r')
+ax1.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
+
 ax2 = fig.add_subplot(334,sharex=ax1,axisbg='black')
 ax2.annotate("InSAR Data", xy=(0, 0.5), xytext=(-ax2.yaxis.labelpad - pad, 0),xycoords=ax2.yaxis.label, textcoords='offset points',size='large', ha='right', va='center')
 plot_varres_scatter(ax2,par_D,T025D[:,3],T025D[:,4],T025D[:,5],7.5,T025Dmask,cmap='gist_rainbow_r')
+ax2.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
+
 ax2b = fig.add_subplot(337,sharex=ax1,axisbg='black')
 ax2b.annotate("Residuals", xy=(0, 0.5), xytext=(-ax2b.yaxis.labelpad - pad, 0),xycoords=ax2b.yaxis.label, textcoords='offset points',size='large', ha='right', va='center')
-#diff1 = np.absolute((T025D_los - T025D[:,5])/T025D[:,6])
-diff1 = np.absolute((T025D_los - T025D[:,5]))
-plot_varres_scatter(ax2b,par_D,T025D[:,3],T025D[:,4],diff1,7.5,None,0,diff1.max(),'CMRmap')
+plot_varres_scatter(ax2b,par_D,T025D[:,3],T025D[:,4],diff1,7.5,None,0,maxdiff,'CMRmap')
+ax2b.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
 
 ax3 = fig.add_subplot(332,sharey=ax1,axisbg='black')
 ax3.annotate("T131A",xy=(0.5,1),xytext=(0,pad),xycoords='axes fraction', textcoords='offset points',size='large', ha='center', va='baseline')
-
 plot_varres_scatter(ax3,par_A,T131A[:,3],T131A[:,4],T131A_los,7.5,cmap='gist_rainbow_r')
+ax3.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
+
 ax4 = fig.add_subplot(335,sharex=ax3,sharey=ax2,axisbg='black')
 plot_varres_scatter(ax4,par_A,T131A[:,3],T131A[:,4],T131A[:,5],7.5,T131Amask,cmap='gist_rainbow_r')
+ax4.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
+
 ax4b = fig.add_subplot(338,sharex=ax3,sharey=ax2b,axisbg='black')
-#diff2 = np.absolute((T131A_los - T131A[:,5])/T131A[:,6])
-diff2 = np.absolute((T131A_los - T131A[:,5]))
-plot_varres_scatter(ax4b,par_D,T131A[:,3],T131A[:,4],diff2,7.5,None,0,diff2.max(),'CMRmap')
+plot_varres_scatter(ax4b,par_D,T131A[:,3],T131A[:,4],diff2,7.5,None,0,maxdiff,'CMRmap')
+ax4b.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
 
 ax5 = fig.add_subplot(333,sharey=ax1,axisbg='black')
 ax5.annotate("T130A",xy=(0.5,1),xytext=(0,pad),xycoords='axes fraction', textcoords='offset points',size='large', ha='center', va='baseline')
-
 plot_varres_scatter(ax5,par_A2,T130A[:,3],T130A[:,4],T130A_los,7.5,cmap='gist_rainbow_r')
+ax5.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
+
 ax6 = fig.add_subplot(336,sharex=ax5,sharey=ax2,axisbg='black')
 plot_varres_scatter(ax6,par_A2,T130A[:,3],T130A[:,4],T130A[:,5],7.5,T130Amask,cmap='gist_rainbow_r')
+ax6.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
+
 ax6b = fig.add_subplot(339,sharex=ax5,sharey=ax2b,axisbg='black')
-#diff3 = np.absolute((T130A_los - T130A[:,5])/T130A[:,6])
-diff3 = np.absolute((T130A_los - T130A[:,5]))
-plot_varres_scatter(ax6b,par_D,T130A[:,3],T130A[:,4],diff3,7.5,None,0,diff3.max(),'CMRmap')
+plot_varres_scatter(ax6b,par_D,T130A[:,3],T130A[:,4],diff3,7.5,None,0,maxdiff,'CMRmap')
+ax6b.scatter(x0ll,y0ll,s=128,c='white',marker='+',linewidth=1)
 
 plt.setp(ax1.get_xticklabels(), visible=False)
 plt.setp(ax2.get_xticklabels(), visible=False)
