@@ -109,7 +109,7 @@ class Counter(object):
             return 0
 
         self.grid = grid
-	self.unqueued = np.full_like(grid,1)
+	self.unqueued = np.full_like(grid,1,np.int32)
 
         row_length = grid.shape[0]
         col_length = grid.shape[1]
@@ -153,4 +153,9 @@ class Counter(object):
     def maxIsland(self):
         from scipy.stats import mode
         m = mode(self.grid,axis=None)
-        return m[0][0]
+	unique, counts = np.unique(self.grid, return_counts=True)
+	keyval = dict(zip(unique,counts))
+	print "Number of data points in each island = " + str(keyval)
+	key = int(m[0][0])
+	msize = keyval[key]
+        return key, msize

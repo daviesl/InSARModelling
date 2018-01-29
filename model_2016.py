@@ -15,9 +15,8 @@ test_folder = mkdtemp(prefix='SMCT')
 # Headers:
 # Number xind yind east north data err wgt Elos Nlos Ulos
 # east/north are actually lon and lat
-T025D = np.loadtxt('T025D_utme.txt',skiprows=2)
-T130A = np.loadtxt('T130A_utme.txt',skiprows=2)
-T131A = np.loadtxt('T131A_utme.txt',skiprows=2)
+T025D = np.loadtxt('T025D_2016_utm.txt',skiprows=2)
+T130A = np.loadtxt('T130A_2016_utm.txt',skiprows=2)
 
 def diagCov(fn):
 	c = np.fromfile(fn, dtype=np.float32)
@@ -25,27 +24,18 @@ def diagCov(fn):
 	c = c.reshape((dim,dim))
 	return np.diag(c)
 
-T025Ddiagcov = diagCov('T025D_utme.cov')
-T130Adiagcov = diagCov('T130A_utme.cov')
-T131Adiagcov = diagCov('T131A_utme.cov')
+T025Ddiagcov = diagCov('T025D_2016_utm.cov')
+T130Adiagcov = diagCov('T130A_2016_utm.cov')
 
 # convert cm to m for los values and set minimum error to 0.01
 T025D[:,5] *= 0.01
 T130A[:,5] *= 0.01
-T131A[:,5] *= 0.01
-
-
-#T025D[:,6] = np.maximum(T025D[:,6],0.001)
-#T130A[:,6] = np.maximum(T130A[:,6],0.001)
-#T131A[:,6] = np.maximum(T131A[:,6],0.001)
 
 T025D[:,6] = np.sqrt(T025D[:,6]**2 + T025Ddiagcov)
 T130A[:,6] = np.sqrt(T130A[:,6]**2 + T130Adiagcov)
-T131A[:,6] = np.sqrt(T131A[:,6]**2 + T131Adiagcov)
 
 T025D[:,6] *= 0.01
 T130A[:,6] *= 0.01
-T131A[:,6] *= 0.01
 
 # interpolate the dem for each of the varres grids
 def linspaceb(start,step,num):
@@ -110,11 +100,9 @@ def readgamma(datafile, par):
     return d
 
 
-par_D = readpar('../T025D/20170831_HH_4rlks_eqa.dem.par')
-par_A = readpar('../T131A/20170829_HH_4rlks_eqa.dem.par')
-par_A2 = readpar('../T130A/20170727_HH_4rlks_eqa.dem.par')
-dem_A = readgamma('../T131A/20170829_HH_4rlks_eqa.dem', par_A)
-dem_D = readgamma('../T025D/20170831_HH_4rlks_eqa.dem', par_D)
+par_D = readpar('../TEST4/T025D/20150205_HH_4rlks_eqa.dem.par')
+par_A2 = readpar('../TEST4/T130A/20151217_HH_4rlks_eqa.dem.par')
+dem_D = readgamma('../TEST4/T025D/20150205_HH_4rlks_eqa.dem', par_D)
 
 #cmap1 = plt.set_cmap('gray')
 #plotdata(dem_D, par_D, cmap1)
@@ -128,7 +116,6 @@ demlat = linspaceb(float(par_D['corner_lat']),float(par_D['post_lat']),int(par_D
 #f = interpolate.interp2d(demlon,demlat,dem_D,kind='linear')
 #dem_T025D = f(T025D[:,3],T025D[:,4]).flatten()
 #dem_T130A = f(T130A[:,3],T130A[:,4]).flatten()
-#dem_T131A = f(T131A[:,3],T131A[:,4]).flatten()
 
 print demlon.shape
 print demlat.shape
@@ -138,12 +125,9 @@ dem_T025D = f(T025D[:,3:5]).flatten()
 dem_T025D_max = dem_T025D.max()
 dem_T130A = f(T130A[:,3:5]).flatten()
 dem_T130A_max = dem_T130A.max()
-dem_T131A = f(T131A[:,3:5]).flatten()
-dem_T131A_max = dem_T131A.max()
-dem_max = max(dem_T025D_max,dem_T130A_max,dem_T131A_max)
+dem_max = max(dem_T025D_max,dem_T130A_max)
 dem_T025D -= dem_max
 dem_T130A -= dem_max
-dem_T131A -= dem_max
 
 print("DEM offset = " + str(-dem_max))
 
@@ -151,11 +135,9 @@ print T025D.shape
 print dem_T025D.shape
 #dem_T025D = interpolate.griddata((demlon,demlat),dem_D.flatten(),(T025D[:,3],T025D[:,4]),method='linear')
 #dem_T130A = interpolate.griddata((demlon,demlat),dem_D.flatten(),(T130A[:,3:4]),method='linear')
-#dem_T131A = interpolate.griddata((demlon,demlat),dem_D.flatten(),(T131A[:,3:4]),method='linear')
 
-ld = (129.074,41.299,500)
-ustc = (129.074200,41.298200,0)
-uri = (129.067000,41.309000,700)
+ld = (T025D[:,3].mean(),T025D[:,4].mean())
+print "Prior Position = " + str(ld)
 
 def long2UTM(lon):
         return (math.floor((float(lon) + 180)/6) % 60) + 1
@@ -172,7 +154,6 @@ utm = pyproj.Proj("+proj=utm +zone="+str(long2UTM(ld[0]))+", +south +ellps=WGS84
 # do everything in UTM
 ldE, ldN = pyproj.transform(wgs,utm,ld[0],ld[1])
 T025D_E_utm, T025D_N_utm = pyproj.transform(wgs,utm,T025D[:,3],T025D[:,4])
-T131A_E_utm, T131A_N_utm = pyproj.transform(wgs,utm,T131A[:,3],T131A[:,4])
 T130A_E_utm, T130A_N_utm = pyproj.transform(wgs,utm,T130A[:,3],T130A[:,4])
 
 # 500m std deviations on priors
@@ -213,13 +194,12 @@ basic_model = pm.Model()
 with basic_model:
 	x0 = pm.Uniform('x0',ldE-hstd,ldE+hstd,transform=None)
 	y0 = pm.Uniform('y0',ldN-hstd,ldN+hstd,transform=None)
-	z0 = pm.Uniform('z0',0,4000,transform=None)
+	z0 = pm.Uniform('z0',0,3000,transform=None)
 	radius = pm.Uniform('radius',0,500,transform=None)
 
 	import mogi
-	mogi.add(T025D_E_utm, T025D_N_utm, dem_T025D, T025D[:,8], T025D[:,9], T025D[:,10], T025D[:,5], T025D[:,6])
-	mogi.add(T131A_E_utm, T131A_N_utm, dem_T131A, T131A[:,8], T131A[:,9], T131A[:,10], T131A[:,5], T131A[:,6])
-	#mogi.add(T130A_E_utm, T130A_N_utm, dem_T130A, T130A[:,8], T130A[:,9], T130A[:,10], T130A[:,5], T130A[:,6])
+	#mogi.add(T025D_E_utm, T025D_N_utm, dem_T025D, T025D[:,8], T025D[:,9], T025D[:,10], T025D[:,5], T025D[:,6])
+	mogi.add(T130A_E_utm, T130A_N_utm, dem_T130A, T130A[:,8], T130A[:,9], T130A[:,10], T130A[:,5], T130A[:,6])
 
 	llk = pm.DensityDist('llk',mogi.logp,observed={'x0':x0,'y0':y0,'z0':z0,'radius':radius})
 	#llk = pm.Potential('llk',logp(x0,y0,z0,radius))
@@ -266,7 +246,7 @@ with basic_model:
 	#plt.show()
 
 	import pickle
-	pickle.dump(trace,open("trace.p","wb"))
+	pickle.dump(trace,open("trace2016.p","wb"))
 
 	pm.traceplot(trace)
 	ax = plt.gca()

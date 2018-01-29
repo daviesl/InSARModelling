@@ -109,8 +109,10 @@ class gamma_reader:
 	mask[self.cor < ct] = 0
         import island
         c = island.Counter()
-        c.numIslands(mask)
-        maxisland = c.maxIsland()
+        numislands = c.numIslands(mask)
+	print "Number of islands = " + str(numislands)
+        maxisland, msize = c.maxIsland()
+	print "Size of island " + str(maxisland) + " is " + str(msize)
         self.phs[c.grid!=maxisland] = np.nan
 
     def read_igram(self, scale=True, flip=False, mult=1.0):

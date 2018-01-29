@@ -21,14 +21,14 @@ __all__ = ["MulitJointGrid", "multijointplot"]
 class MulitJointGrid(object):
     """Grid for drawing a multiple bivariate plots with marginal univariate plots."""
 
-    def __init__(self, x, y, data=None, size=6, ratio=5, space=.2,
-                 dropna=True, xlim=None, ylim=None):
+    def __init__(self, columns, data=None, size=6, ratio=5, space=.2,
+                 dropna=True, lim=None):
         """Set up the grid of subplots.
 
         Parameters
         ----------
-        x, y : strings or vectors
-            Data or names of variables in ``data``.
+        columns : list of strings
+            Names of variables in ``data``.
         data : DataFrame, optional
             DataFrame when ``x`` and ``y`` are variable names.
         size : numeric
@@ -39,7 +39,7 @@ class MulitJointGrid(object):
             Space between the joint and marginal axes
         dropna : bool, optional
             If True, remove observations that are missing from `x` and `y`.
-        {x, y}lim : two-tuples, optional
+        lim : list of two-tuples, optional
             Axis limits to set before plotting.
 
         See Also
@@ -64,7 +64,7 @@ class MulitJointGrid(object):
         .. plot::
             :context: close-figs
 
-            >>> g = sns.JointGrid(x="total_bill", y="tip", data=tips)
+            >>> g = sns.MultiJointGrid(columns=["total_bill","tip"], data=tips)
             >>> g = g.plot(sns.regplot, sns.distplot)
 
         Draw the join and marginal plots separately, which allows finer-level
@@ -74,7 +74,7 @@ class MulitJointGrid(object):
             :context: close-figs
 
             >>> import matplotlib.pyplot as plt
-            >>> g = sns.JointGrid(x="total_bill", y="tip", data=tips)
+            >>> g = sns.MultiJointGrid(columns=["total_bill","tip"], data=tips)
             >>> g = g.plot_joint(plt.scatter, color=".5", edgecolor="white")
             >>> g = g.plot_marginals(sns.distplot, kde=False, color=".5")
 
@@ -84,7 +84,7 @@ class MulitJointGrid(object):
             :context: close-figs
 
             >>> import numpy as np
-            >>> g = sns.JointGrid(x="total_bill", y="tip", data=tips)
+            >>> g = sns.MultiJointGrid(columns=["total_bill","tip"], data=tips)
             >>> g = g.plot_joint(plt.scatter, color="m", edgecolor="white")
             >>> _ = g.ax_marg_x.hist(tips["total_bill"], color="b", alpha=.6,
             ...                      bins=np.arange(0, 60, 5))
@@ -99,7 +99,7 @@ class MulitJointGrid(object):
             :context: close-figs
 
             >>> from scipy import stats
-            >>> g = sns.JointGrid(x="total_bill", y="tip", data=tips)
+            >>> g = sns.MultiJointGrid(columns=["total_bill","tip"], data=tips)
             >>> g = g.plot_joint(plt.scatter,
             ...                  color="g", s=40, edgecolor="white")
             >>> g = g.plot_marginals(sns.distplot, kde=False, color="g")
@@ -110,7 +110,7 @@ class MulitJointGrid(object):
         .. plot::
             :context: close-figs
 
-            >>> g = sns.JointGrid(x="total_bill", y="tip", data=tips)
+            >>> g = sns.MulitJointGrid(columns=["total_bill","tip"], data=tips)
             >>> g = g.plot_joint(plt.scatter,
             ...                  color="g", s=40, edgecolor="white")
             >>> g = g.plot_marginals(sns.distplot, kde=False, color="g")
@@ -123,7 +123,7 @@ class MulitJointGrid(object):
         .. plot::
             :context: close-figs
 
-            >>> g = sns.JointGrid(x="total_bill", y="tip", data=tips, space=0)
+            >>> g = sns.MultiJointGrid(columns=["total_bill","tip"], data=tips, space=0)
             >>> g = g.plot_joint(sns.kdeplot, cmap="Blues_d")
             >>> g = g.plot_marginals(sns.kdeplot, shade=True)
 
@@ -132,7 +132,7 @@ class MulitJointGrid(object):
         .. plot::
             :context: close-figs
 
-            >>> g = sns.JointGrid(x="total_bill", y="tip", data=tips,
+            >>> g = sns.MultiJointGrid(columns=["total_bill","tip"], data=tips,
             ...                   size=5, ratio=2)
             >>> g = g.plot_joint(sns.kdeplot, cmap="Reds_d")
             >>> g = g.plot_marginals(sns.kdeplot, color="r", shade=True)
@@ -142,8 +142,8 @@ class MulitJointGrid(object):
         .. plot::
             :context: close-figs
 
-            >>> g = sns.JointGrid(x="total_bill", y="tip", data=tips,
-            ...                   xlim=(0, 50), ylim=(0, 8))
+            >>> g = sns.MulitJointGrid(columns=["total_bill","tip"], data=tips,
+            ...                   lim=[(0, 50)(0, 8)])
             >>> g = g.plot_joint(sns.kdeplot, cmap="Purples_d")
             >>> g = g.plot_marginals(sns.kdeplot, color="m", shade=True)
 
@@ -203,10 +203,11 @@ class MulitJointGrid(object):
         self.x = np.asarray(x)
         self.y = np.asarray(y)
 
-        if xlim is not None:
-            ax_joint.set_xlim(xlim)
+	# FIXME multiple axes
+        if lim is not None:
+            ax_joint.set_xlim(lim[0])
         if ylim is not None:
-            ax_joint.set_ylim(ylim)
+            ax_joint.set_ylim(lim[1])
 
         # Make the grid look nice
         utils.despine(f)

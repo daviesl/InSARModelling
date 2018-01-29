@@ -85,7 +85,7 @@ class tree:
         npts = len(self.xi)
 
         for i in xrange(npts):
-	    str = "%4d %4d %4d %3.12f %3.12f %3.6f %2.5f %6d %2.5f %2.5f %2.5f\n" \
+	    str = "%4d %4d %4d %3.12f %3.12f %3.6f %2.12f %6d %2.5f %2.5f %2.5f\n" \
 	        % (int(i+1),int(self.xi[i]),int(self.yi[i]),self.ecoord[i],self.ncoord[i],self.zi[i], \
 	        self.zerr[i],self.wgt[i],self.geom[0][i],self.geom[1][i],self.geom[2][i])
 	    fout.write(str)

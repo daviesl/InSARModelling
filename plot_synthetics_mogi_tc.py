@@ -13,19 +13,28 @@ T025D = np.loadtxt('T025D_utme.txt',skiprows=2)
 T130A = np.loadtxt('T130A_utme.txt',skiprows=2)
 T131A = np.loadtxt('T131A_utme.txt',skiprows=2)
 
+def diagCov(fn):
+	c = np.fromfile(fn, dtype=np.float32)
+	dim = int(math.sqrt(c.shape[0]))
+	c = c.reshape((dim,dim))
+	return np.diag(c)
+
+T025Ddiagcov = diagCov('T025D_utme.cov')
+T130Adiagcov = diagCov('T130A_utme.cov')
+T131Adiagcov = diagCov('T131A_utme.cov')
+
 # convert cm to m for los values and set minimum error to 0.01
 T025D[:,5] *= 0.01
 T130A[:,5] *= 0.01
 T131A[:,5] *= 0.01
 
+T025D[:,6] = np.sqrt(T025D[:,6]**2 + T025Ddiagcov)
+T130A[:,6] = np.sqrt(T130A[:,6]**2 + T130Adiagcov)
+T131A[:,6] = np.sqrt(T131A[:,6]**2 + T131Adiagcov)
+
 T025D[:,6] *= 0.01
 T130A[:,6] *= 0.01
 T131A[:,6] *= 0.01
-
-T025D[:,6] = np.maximum(T025D[:,6],0.001)
-T130A[:,6] = np.maximum(T130A[:,6],0.001)
-T131A[:,6] = np.maximum(T131A[:,6],0.001)
-
 
 # interpolate the dem for each of the varres grids
 def linspaceb(start,step,num):
