@@ -150,6 +150,11 @@ T025D_E_utm, T025D_N_utm = pyproj.transform(wgs,utm,T025D[:,3],T025D[:,4])
 T131A_E_utm, T131A_N_utm = pyproj.transform(wgs,utm,T131A[:,3],T131A[:,4])
 T130A_E_utm, T130A_N_utm = pyproj.transform(wgs,utm,T130A[:,3],T130A[:,4])
 
+minlon = min(T025D[:,3].min(),T131A[:,3].min(),T130A[:,3].min())
+maxlon = max(T025D[:,3].max(),T131A[:,3].max(),T130A[:,3].max())
+minlat = min(T025D[:,4].min(),T131A[:,4].min(),T130A[:,4].min())
+maxlat = max(T025D[:,4].max(),T131A[:,4].max(),T130A[:,4].max())
+
 # 500m std deviations on priors
 hstd = 1000.0 #/ (3600 * 30)
 vstd = 1500.0
@@ -265,8 +270,8 @@ else:
 	# last Mogi
 	x0 = 506366.147    #   0.637            0.005            [506364.907, 506367.379]
 	y0 = 14572321.053  #   0.568            0.005            [14572319.977, 14572322.201]
-	z0 = 600 #z0 = 465.648       #   0.540            0.004            [464.592, 466.715]
-	radius = 50 #radius = 71.884    #       0.018            0.000            [71.848, 71.918]
+	z0 = 400 #z0 = 465.648       #   0.540            0.004            [464.592, 466.715]
+	radius = 55 #radius = 71.884    #       0.018            0.000            [71.848, 71.918]
 	#print "{'y0': array(14572347.107446698), 'x0': array(506379.4341817431), 'radius': array(70.35783911344616), 'z0': array(455.17884772392574)}" # 
 	#print(pm.summary(trace)) 
 	#argmaxlike = trace.get_values('like',burn=2000).argmax()
@@ -295,32 +300,64 @@ else:
 	
 	deltaE = float(par_D['post_lon'])*3600*30 * 4
 	deltaN = float(par_D['post_lat'])*3600*30 * 4
-	min_E = min(T025D_E_utm.min(), T130A_E_utm.min(), T131A_E_utm.min()) - abs(deltaE)
-	max_E = max(T025D_E_utm.max(), T130A_E_utm.max(), T131A_E_utm.max()) + abs(deltaE)
-	min_N = min(T025D_N_utm.min(), T130A_N_utm.min(), T131A_N_utm.min()) - abs(deltaN)
-	max_N = max(T025D_N_utm.max(), T130A_N_utm.max(), T131A_N_utm.max()) + abs(deltaN)
-	#print (min_E,max_E)
-	#print (min_N,max_N)
-	demE = np.arange(min_E,max_E,deltaE)
-	demN = np.arange(max_N,min_N,deltaN) # should be 7.5 metres
+	min_Eo = min(T025D_E_utm.min(), T130A_E_utm.min(), T131A_E_utm.min()) - abs(deltaE)
+	max_Eo = max(T025D_E_utm.max(), T130A_E_utm.max(), T131A_E_utm.max()) + abs(deltaE)
+	min_No = min(T025D_N_utm.min(), T130A_N_utm.min(), T131A_N_utm.min()) - abs(deltaN)
+	max_No = max(T025D_N_utm.max(), T130A_N_utm.max(), T131A_N_utm.max()) + abs(deltaN)
+	# Instead of constraining to the minimum area, construct a 2^n x 2^n grid that covers the area
+	# This is to make the FFT most efficient.
+	# We already have desirable area. Choose the largest dimension, expand the other d to it and then grid by 512x512
+	smallestd = min(max_Eo-min_Eo,max_No-min_No)
+	addE = 0.5*(smallestd - (max_Eo-min_Eo))
+	addN = 0.5*(smallestd - (max_No-min_No))
+	print "Add E,N = " + str((addE,addN))
+	min_E = min_Eo - addE
+	max_E = max_Eo + addE
+	min_N = min_No - addN
+	max_N = max_No + addN
+	# Grid it
+	gridspacing = 512
+	deltaEN = smallestd / gridspacing 
+	print (min_E,max_E,max_E-min_E)
+	print (min_N,max_N,max_N-min_N)
+	#demE = np.arange(min_E,max_E,deltaE)
+	#demN = np.arange(max_N,min_N,deltaN) # should be 7.5 metres
+	demE = np.linspace(min_E,max_E,gridspacing)
+	demN = np.linspace(min_N,max_N,gridspacing)
+	#demN = np.flipud(np.linspace(min_N,max_N,gridspacing))
 	demEE,demNN = np.meshgrid(demE,demN)
 	demLon, demLat = pyproj.transform(utm,wgs,demEE,demNN)
 	dem_utm_wgs_grid = np.column_stack((demLon.flatten(),demLat.flatten()))
 	dem_D_utm = f(dem_utm_wgs_grid)
 	gridshape = (demN.shape[0],demE.shape[0])
 	dem_D_utm = dem_D_utm.reshape(gridshape)
-	# compare
-	#fig = plt.figure()
-	#fa1 = fig.add_subplot(211)
-	#fa1.imshow(dem_D)
-	#fa2 = fig.add_subplot(212)
-	#fa2.imshow(dem_D_utm)
-	#plt.show()
 	
 	#utm_f = RegularGridInterpolator((demE,demN)),np.flipud(dem_D_utm).T)
 	
-	dem_D_utm = np.ones_like(dem_D_utm)
-	(dem_dE, dem_dN, dem_dZ) = mogi.mogiTopoCorrected(x0,y0,z0,radius,demEE.reshape(gridshape),demNN.reshape(gridshape),dem_D_utm,deltaE)
+	def makegaussian(xs,ys,sigma,mu):
+		x, y = np.meshgrid(np.linspace(-1,1,xs), np.linspace(-1,1,ys))
+		d = np.sqrt(x*x+y*y)
+		return np.exp(-( (d-mu)**2 / ( 2.0 * sigma**2 ) ) )
+	
+	#dem_D_utm = np.ones_like(dem_D_utm)
+	foxyminx = min(dem_D_utm.shape[1],dem_D_utm.shape[0])
+	#dem_D_utm = np.zeros_like(dem_D_utm)
+	# roffl = int((dem_D_utm.shape[0]-foxyminx)/2)
+	# coffl = int((dem_D_utm.shape[1]-foxyminx)/2)
+	# roffr = dem_D_utm.shape[0]-roffl-foxyminx
+	# coffr = dem_D_utm.shape[1]-coffl-foxyminx
+	# print(roffl,roffr,coffl,coffr)
+	# print dem_D_utm.shape
+	dem_D_utm = makegaussian(foxyminx,foxyminx,1.0,0.0) * 500
+	# compare
+	fig = plt.figure()
+	fa1 = fig.add_subplot(211)
+	fa1.imshow(dem_D)
+	fa2 = fig.add_subplot(212)
+	fa2.imshow(dem_D_utm)
+	plt.show()
+	
+	(dem_dE, dem_dN, dem_dZ) = mogi.mogiTopoCorrected(x0,y0,z0,radius,demEE.reshape(gridshape),demNN.reshape(gridshape),dem_D_utm,deltaEN)
 	#print dem_dE
 	#print dem_dN
 	#print dem_dZ
@@ -346,9 +383,12 @@ else:
 	print (demN.min(),demN.max())
 	print (T025D_utmloc[:,0].min(),T025D_utmloc[:,0].max())
 	print (T025D_utmloc[:,1].min(),T025D_utmloc[:,1].max())
-	utm_synthetic_dE = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dE).T)
-	utm_synthetic_dN = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dN).T)
-	utm_synthetic_dZ = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dZ).T)
+	utm_synthetic_dE = RegularGridInterpolator((demE,demN),dem_dE.T)
+	utm_synthetic_dN = RegularGridInterpolator((demE,demN),dem_dN.T)
+	utm_synthetic_dZ = RegularGridInterpolator((demE,demN),dem_dZ.T)
+	#utm_synthetic_dE = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dE).T)
+	#utm_synthetic_dN = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dN).T)
+	#utm_synthetic_dZ = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dZ).T)
 	T025D_dE = utm_synthetic_dE(T025D_utmloc)
 	T025D_dN = utm_synthetic_dN(T025D_utmloc)
 	T025D_dZ = utm_synthetic_dZ(T025D_utmloc)

@@ -109,6 +109,9 @@ def mogiTopoCorrected(x0,y0,z0,radius,x,y,refdem,spacing):
 	s = np.fft.fftfreq(nx,spacing)
 	t = np.fft.fftfreq(ny,spacing)
 	ss,tt = np.meshgrid(s,t)
+	print "2D Fourier coordinates"
+	print s
+	print t
 	(G1, G2, G3, G4, G5) = FourierGreensCorrections(ss,tt,mu,nu)
 	U1 = -2.0j * math.pi * (F11 * G1 * ss + F12 * G1 * tt + F12 * G3 * ss + F22 * G3 * tt)
 	U2 = -2.0j * math.pi * (F12 * G2 * ss + F22 * G2 * tt + F11 * G3 * ss + F12 * G3 * tt)
