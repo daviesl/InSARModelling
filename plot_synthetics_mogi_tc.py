@@ -57,22 +57,6 @@ def plotdata(d, par, cmap):
     plt.colorbar()
     plt.show()
 
-
-def mogi(coeffs,x,y):
-    """evaluate a single Mogi peak over a 2D (2 by N) numpy array of evalpts, where coeffs = (x0,y0,z0,dV)"""
-    x0,y0,z0,dV = coeffs
-    dx = x - x0
-    dy = y - y0
-    dz = z0
-    c = dV * 3. / (4. * math.pi)
-    # or equivalently c= (3/4) a^3 dP / rigidity
-    # where a = sphere radius, dP = delta Pressure
-    r2 = dx*dx + dy*dy + dz*dz
-    C = c / pow(r2, 1.5)
-    return (C*dx,C*dy,C*dz)
-
-
-
 def readpar(file):
     """Function to read a GAMMA parameter (metadata) file into a dictionary"""
     par={}
@@ -133,9 +117,11 @@ dem_T130A_max = dem_T130A.max()
 dem_T131A = f(T131A[:,3:5]).flatten()
 dem_T131A_max = dem_T131A.max()
 dem_max = max(dem_T025D_max,dem_T130A_max,dem_T131A_max)
-dem_T025D -= dem_max
-dem_T130A -= dem_max
-dem_T131A -= dem_max
+dem_maxmed = max(np.median(dem_T025D),np.median(dem_T130A),np.median(dem_T131A_max))
+dem_reflevel = 0.75 * dem_max + 0.25 * dem_maxmed # arbitrary
+dem_T025D = dem_reflevel - dem_T025D
+dem_T130A = dem_reflevel - dem_T130A
+dem_T131A = dem_reflevel - dem_T131A
 
 print("DEM offset = " + str(-dem_max))
 
@@ -167,20 +153,6 @@ T130A_E_utm, T130A_N_utm = pyproj.transform(wgs,utm,T130A[:,3],T130A[:,4])
 # 500m std deviations on priors
 hstd = 1000.0 #/ (3600 * 30)
 vstd = 1500.0
-
-def mogiDEM(x0_,y0_,z0_,radius_,x,y,dem):
-	"""evaluate a single Mogi peak over a 2D (2 by N) numpy array of evalpts, where coeffs = (x0,y0,z0,dV)"""
-	#x0,y0,z0,dV = coeffs
-	dx = x - x0_
-	dy = y - y0_
-	dz = (dem + z0_).clip(0,1e4) # max 1e4m depth
-	dV_ = 4.0/3.0 * math.pi * (radius_**3)
-	c = dV_ * 3. / (4. * math.pi)
-	# or equivalently c= (3/4) a^3 dP / rigidity
-	# where a = sphere radius, dP = delta Pressure
-	r2 = dx*dx + dy*dy + dz*dz
-	C = c / (r2 ** 1.5)
-	return (C*dx,C*dy,C*dz)
 
 from yang import *
 
@@ -270,12 +242,12 @@ radius= 71.884
 
 modeltype='Mogi'
 
-import pickle
-import theano.tensor as T
-import seaborn as sns
-import pymc3 as pm
+#import pickle
+#import theano.tensor as T
+#import seaborn as sns
+#import pymc3 as pm
 
-trace = pickle.load(open("trace.p","rb"))
+#trace = pickle.load(open("trace.p","rb"))
 
 if modeltype=='Yang':
 	# last Yang
@@ -293,15 +265,15 @@ else:
 	# last Mogi
 	x0 = 506366.147    #   0.637            0.005            [506364.907, 506367.379]
 	y0 = 14572321.053  #   0.568            0.005            [14572319.977, 14572322.201]
-	z0 = 465.648       #   0.540            0.004            [464.592, 466.715]
-	radius = 71.884    #       0.018            0.000            [71.848, 71.918]
-	print "{'y0': array(14572347.107446698), 'x0': array(506379.4341817431), 'radius': array(70.35783911344616), 'z0': array(455.17884772392574)}" # 
-	print(pm.summary(trace)) 
-	argmaxlike = trace.get_values('like',burn=2000).argmax()
-	x0 = trace.get_values('x0',burn=2000)[argmaxlike]
-	y0 = trace.get_values('y0',burn=2000)[argmaxlike]
-	z0 = trace.get_values('z0',burn=2000)[argmaxlike]
-	radius = trace.get_values('radius',burn=2000)[argmaxlike]
+	z0 = 600 #z0 = 465.648       #   0.540            0.004            [464.592, 466.715]
+	radius = 50 #radius = 71.884    #       0.018            0.000            [71.848, 71.918]
+	#print "{'y0': array(14572347.107446698), 'x0': array(506379.4341817431), 'radius': array(70.35783911344616), 'z0': array(455.17884772392574)}" # 
+	#print(pm.summary(trace)) 
+	#argmaxlike = trace.get_values('like',burn=2000).argmax()
+	#x0 = trace.get_values('x0',burn=2000)[argmaxlike]
+	#y0 = trace.get_values('y0',burn=2000)[argmaxlike]
+	#z0 = trace.get_values('z0',burn=2000)[argmaxlike]
+	#radius = trace.get_values('radius',burn=2000)[argmaxlike]
 	print "y0: %f x0: %f radius %f z0 %f"%(y0,x0,radius,z0)
 
 x0ll, y0ll = pyproj.transform(utm,wgs,x0,y0)
@@ -313,9 +285,82 @@ if modeltype=='Yang':
 	(T131A_dE, T131A_dN, T131A_dZ) = yangmodel(x0,y0,z0,semimajor,aspectratio,DP_mu,mu,nu,theta,phi,T131A_E_utm,T131A_N_utm,dem_T131A)
 	(T130A_dE, T130A_dN, T130A_dZ) = yangmodel(x0,y0,z0,semimajor,aspectratio,DP_mu,mu,nu,theta,phi,T130A_E_utm,T130A_N_utm,dem_T130A)
 else:
-	(T025D_dE, T025D_dN, T025D_dZ) = mogiDEM(x0,y0,z0,radius,T025D_E_utm,T025D_N_utm,dem_T025D)
-	(T131A_dE, T131A_dN, T131A_dZ) = mogiDEM(x0,y0,z0,radius,T131A_E_utm,T131A_N_utm,dem_T131A)
-	(T130A_dE, T130A_dN, T130A_dZ) = mogiDEM(x0,y0,z0,radius,T130A_E_utm,T130A_N_utm,dem_T130A)
+	import mogi
+	#(T025D_dE, T025D_dN, T025D_dZ) = mogiTopoCorrected(x0,y0,z0,radius,T025D_E_utm,T025D_N_utm,dem_T025D)
+	#(T131A_dE, T131A_dN, T131A_dZ) = mogiTopoCorrected(x0,y0,z0,radius,T131A_E_utm,T131A_N_utm,dem_T131A)
+	#(T130A_dE, T130A_dN, T130A_dZ) = mogiTopoCorrected(x0,y0,z0,radius,T130A_E_utm,T130A_N_utm,dem_T130A)
+	""" Interpolate a UTM grid from the above DEM"""
+	""" First get range of utm coords, 
+	    then interp using 7.5m grid spacing """
+	
+	deltaE = float(par_D['post_lon'])*3600*30 * 4
+	deltaN = float(par_D['post_lat'])*3600*30 * 4
+	min_E = min(T025D_E_utm.min(), T130A_E_utm.min(), T131A_E_utm.min()) - abs(deltaE)
+	max_E = max(T025D_E_utm.max(), T130A_E_utm.max(), T131A_E_utm.max()) + abs(deltaE)
+	min_N = min(T025D_N_utm.min(), T130A_N_utm.min(), T131A_N_utm.min()) - abs(deltaN)
+	max_N = max(T025D_N_utm.max(), T130A_N_utm.max(), T131A_N_utm.max()) + abs(deltaN)
+	#print (min_E,max_E)
+	#print (min_N,max_N)
+	demE = np.arange(min_E,max_E,deltaE)
+	demN = np.arange(max_N,min_N,deltaN) # should be 7.5 metres
+	demEE,demNN = np.meshgrid(demE,demN)
+	demLon, demLat = pyproj.transform(utm,wgs,demEE,demNN)
+	dem_utm_wgs_grid = np.column_stack((demLon.flatten(),demLat.flatten()))
+	dem_D_utm = f(dem_utm_wgs_grid)
+	gridshape = (demN.shape[0],demE.shape[0])
+	dem_D_utm = dem_D_utm.reshape(gridshape)
+	# compare
+	#fig = plt.figure()
+	#fa1 = fig.add_subplot(211)
+	#fa1.imshow(dem_D)
+	#fa2 = fig.add_subplot(212)
+	#fa2.imshow(dem_D_utm)
+	#plt.show()
+	
+	#utm_f = RegularGridInterpolator((demE,demN)),np.flipud(dem_D_utm).T)
+	
+	dem_D_utm = np.ones_like(dem_D_utm)
+	(dem_dE, dem_dN, dem_dZ) = mogi.mogiTopoCorrected(x0,y0,z0,radius,demEE.reshape(gridshape),demNN.reshape(gridshape),dem_D_utm,deltaE)
+	#print dem_dE
+	#print dem_dN
+	#print dem_dZ
+	fig = plt.figure()
+	fa1 = fig.add_subplot(131)
+	cfa1 = fa1.imshow(np.real(dem_dE))
+	fa2 = fig.add_subplot(132)
+	cfa2 = fa2.imshow(np.real(dem_dN))
+	fa3 = fig.add_subplot(133)
+	cfa3 = fa3.imshow(np.real(dem_dZ))
+	plt.colorbar(cfa1, ax=fa1)
+	plt.colorbar(cfa2, ax=fa2)
+	plt.colorbar(cfa3, ax=fa3)
+	plt.show()
+
+	T025D_utmloc = np.column_stack((T025D_E_utm,T025D_N_utm))
+	T130A_utmloc = np.column_stack((T130A_E_utm,T130A_N_utm))
+	T131A_utmloc = np.column_stack((T131A_E_utm,T131A_N_utm))
+
+	print (min_E,max_E)
+	print (min_N,max_N)
+	print (demE.min(),demE.max())
+	print (demN.min(),demN.max())
+	print (T025D_utmloc[:,0].min(),T025D_utmloc[:,0].max())
+	print (T025D_utmloc[:,1].min(),T025D_utmloc[:,1].max())
+	utm_synthetic_dE = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dE).T)
+	utm_synthetic_dN = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dN).T)
+	utm_synthetic_dZ = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dZ).T)
+	T025D_dE = utm_synthetic_dE(T025D_utmloc)
+	T025D_dN = utm_synthetic_dN(T025D_utmloc)
+	T025D_dZ = utm_synthetic_dZ(T025D_utmloc)
+	T130A_dE = utm_synthetic_dE(T130A_utmloc)
+	T130A_dN = utm_synthetic_dN(T130A_utmloc)
+	T130A_dZ = utm_synthetic_dZ(T130A_utmloc)
+	T131A_dE = utm_synthetic_dE(T131A_utmloc)
+	T131A_dN = utm_synthetic_dN(T131A_utmloc)
+	T131A_dZ = utm_synthetic_dZ(T131A_utmloc)
+	
+
+
 
 T025D_los = (T025D[:,8]*T025D_dE + T025D[:,9]*T025D_dN + T025D[:,10]*T025D_dZ)
 T025D[:,5]

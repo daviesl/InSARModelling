@@ -24,18 +24,43 @@ def FourierGreensCorrections(s,t,mu,nu):
 	G1= (s2 + t2 - nu * s2) / (2 * math.pi * mu * (s2 + t2)**1.5)
 	G2= (s2 + t2 - nu * t2) / (2 * math.pi * mu * (s2 + t2)**1.5)
 	G3= ( - nu * s * t) / (2 * math.pi * mu * (s2 + t2)**1.5)
-	G4= ( - (1 - 2*nu) * s * 1j) / (4 * math.pi * mu * (s2 + t2))
-	G5= ( - (1 - 2*nu) * t * 1j) / (4 * math.pi * mu * (s2 + t2))
+	G4= ( - (1 - 2*nu) * s * 1j) / (2 * math.pi * mu * (s2 + t2))
+	G5= ( - (1 - 2*nu) * t * 1j) / (2 * math.pi * mu * (s2 + t2))
+	G1[np.isnan(G1)]=0
+	G2[np.isnan(G2)]=0
+	G3[np.isnan(G3)]=0
+	G4[np.isnan(G4)]=0
+	G5[np.isnan(G5)]=0
+	return (G1, G2, G3, G4, G5)
 
 def stressCoeffs(lam,mu,nu,uxx):
 	c = lam*(1-2*nu)/(1-nu)
-	truxx = uxx[0,0]+uxx[1,1]
-	s11 = c*truxx + 2*mu*uxx[0,0]
-	s22 = c*truxx + 2*mu*uxx[1,1]
-	s12 = mu*(uxx[0,1]+uxx[1,0]
+	truxx = uxx[0][0]+uxx[1][1]
+	s11 = c*truxx + 2*mu*uxx[0][0]
+	s22 = c*truxx + 2*mu*uxx[1][1]
+	#s111 = c*uxx[0][0] + 2*mu*uxx[0][0]
+	#s221 = c*uxx[0][0] + 2*mu*uxx[1][1]
+	#s112 = c*uxx[1][1] + 2*mu*uxx[0][0]
+	#s222 = c*uxx[1][1] + 2*mu*uxx[1][1]
+	s12 = mu*(uxx[0][1]+uxx[1][0])
+	#import matplotlib.pyplot as plt
+	#fig = plt.figure()
+	#fa1 = fig.add_subplot(151)
+	#fa1.imshow(s111)
+	#fa1 = fig.add_subplot(152)
+	#fa1.imshow(s112)
+	#fa2 = fig.add_subplot(153)
+	#fa2.imshow(s221)
+	#fa2 = fig.add_subplot(154)
+	#fa2.imshow(s222)
+	#fa3 = fig.add_subplot(155)
+	#fa3.imshow(s12)
+	#plt.show()
+	#
+	#return (s111,s112,s221,s222,s12)
 	return (s11,s22,s12)
 
-def mogiTopoCorrected(x0,y0,z0,radius,x,y,refdem):
+def mogiTopoCorrected(x0,y0,z0,radius,x,y,refdem,spacing):
 	"""
 	Assumes x,y are equivalent to np.meshgrid(easting,northing) for all coordinates in the refdem.
 	All expressions are taken from Williams and Wadge (2000)
@@ -50,18 +75,48 @@ def mogiTopoCorrected(x0,y0,z0,radius,x,y,refdem):
 	P0 = mu / (1 - nu)
 	(ux,uxx,uxxx) = mogiZerothOrder(x0,y0,z0,radius,mu,nu,P0,x,y)
 	# FIXME define range of s and t
-	s = np.fft.fftfreq(n,spacing)
-	t = np.fft.fftfreq(n,spacing)
-	ss,tt = np.meshgrid((s,t))
-	(G1, G2, G3, G4, G5) = FourierGreensCorrections(ss,tt,mu,nu)
+	nx = refdem.shape[1]
+	ny = refdem.shape[0]
+	#import matplotlib.pyplot as plt
+	#fig = plt.figure()
+	#fa1 = fig.add_subplot(151)
+	#fa1.imshow(G1)
+	#fa1 = fig.add_subplot(152)
+	#fa1.imshow(G2)
+	#fa2 = fig.add_subplot(153)
+	#fa2.imshow(G3)
+	#fa2 = fig.add_subplot(154)
+	#fa2.imshow(G4)
+	#fa3 = fig.add_subplot(155)
+	#fa3.imshow(G5)
+	#plt.show()
 	(s11,s22,s12) = stressCoeffs(lam,mu,nu,uxx)
-	U1 = np.fft.fft2(refdem*(s11 + s12)) * G1 + np.fft.fft2(refdem*(s12 + s22)) * G3
-	U2 = np.fft.fft2(refdem*(s11 + s12)) * G2 + np.fft.fft2(refdem*(s12 + s22)) * G3
-	U3 = np.fft.fft2(refdem*(s11 + s12)) * G4 + np.fft.fft2(refdem*(s12 + s22)) * G5
-	return (np.fft.ifft2(U1), np.fft.ifft2(U2), np.fft.ifft2(U3))
-	
-	
-	
+	F11 = np.fft.fft2(refdem*s11)
+	F12 = np.fft.fft2(refdem*s12)
+	F22 = np.fft.fft2(refdem*s22)
+	#import matplotlib.pyplot as plt
+	#fig = plt.figure()
+	#fa1 = fig.add_subplot(131)
+	#cfa1 = fa1.imshow(np.real(F11))
+	#fa2 = fig.add_subplot(132)
+	#cfa2 = fa2.imshow(np.real(F12))
+	#fa3 = fig.add_subplot(133)
+	#cfa3 = fa3.imshow(np.real(F22))
+	#plt.colorbar(cfa1, ax=fa1)
+	#plt.colorbar(cfa2, ax=fa2)
+	#plt.colorbar(cfa3, ax=fa3)
+	#plt.show()
+	s = np.fft.fftfreq(nx,spacing)
+	t = np.fft.fftfreq(ny,spacing)
+	ss,tt = np.meshgrid(s,t)
+	(G1, G2, G3, G4, G5) = FourierGreensCorrections(ss,tt,mu,nu)
+	U1 = -2.0j * math.pi * (F11 * G1 * ss + F12 * G1 * tt + F12 * G3 * ss + F22 * G3 * tt)
+	U2 = -2.0j * math.pi * (F12 * G2 * ss + F22 * G2 * tt + F11 * G3 * ss + F12 * G3 * tt)
+	U3 = -2.0j * math.pi * (F11 * G4 * ss + F12 * G4 * tt + F12 * G5 * ss + F22 * G5 * tt)
+	#return (np.fft.ifft2(U1).reshape(nx,ny), np.fft.ifft2(U2).reshape(nx,ny), np.fft.ifft2(U3).reshape(nx,ny))
+	return (ux[0] + np.fft.ifft2(U1), ux[1] + np.fft.ifft2(U2), ux[2] + np.fft.ifft2(U3))
+	#return (np.fft.ifft2(U1), np.fft.ifft2(U2), np.fft.ifft2(U3))
+	#return (ux[0], ux[1], ux[2] )
 
 # Pre-compute the Greens functions ffts for the DEM
 # First compute zeroth order mogi
@@ -71,31 +126,41 @@ def mogiTopoCorrected(x0,y0,z0,radius,x,y,refdem):
 def mogiZerothOrder(x0,y0,z0,radius,mu,nu,P0,x,y):
 	"""evaluate a single Mogi peak over a 2D (2 by N) numpy array of evalpts, where coeffs = (x0,y0,z0,radius)
 	"""
-	dx = (x - x0,y - y0, np.zeros(x.shape[0]) + z0)
+	dx = (x - x0,y - y0, np.zeros(x.shape) + z0)
 	K = (P0 * (1 - nu) / mu) * (radius**3) # reduces to radius**3 for granite
 	# or equivalently c= (3/4) a^3 dP / rigidity
 	# where a = sphere radius, dP = delta Pressure
-	R2 = (dx[0]**2 + dy[1]**2 + dz[2]**2)
+	R2 = (dx[0]**2 + dx[1]**2 + dx[2]**2)
 	R3 = R2 ** 1.5
 	R5 = R2 ** 2.5
 	kr=np.identity(3)
 	#ux=np.zeros(3)
 	#uxx=np.zeros((3,3))
 	#uxxx=np.zeros((3,3,3))
-	ux=[np.array() for i in xrange(3)]
-	uxx=[ux[:] for i in xrange(3)]
-	uxxx=[uxx[:] for i in xrange(3)]
+	ux=[0 for i in xrange(3)]
+	uxx=[[0 for i in xrange(3)] for j in xrange(3)]
+	uxxx=[[[0 for i in xrange(3)] for j in xrange(3)] for k in xrange(3)]
 	for i in xrange(3):
 		ux[i]=dx[i]*K/R3
 	for j in xrange(2):
 		for i in xrange(2):
-			uxx[i,j]=(kr[i,j]-3.0*dx[i]*dx[j]/R2)*K/R3
-		uxx[2,j]=(-3.0*K*dx[2]*dx[j])/R5
+			uxx[i][j]=(kr[i,j]-3.0*dx[i]*dx[j]/R2)*K/R3
+		uxx[2][j]=(-3.0*K*dx[2]*dx[j])/R5
+	print uxxx[0][0][0]
 	for j in xrange(2):
 		for k in xrange(2):
 			for i in xrange(2):
-				uxxx[i,j,k]=((5.0*dx[i]*dx[j]*dx[k])/R2-kr[i,j]*dx[k]-kr[i,k]*dx[j]-kr[j,k]*dx[i])*3.0*K/R5
-		uxxx[2,j,k]=((5.0**dx[j]*dx[k])/R2-kr[j,k])*3.0*K*dx[2]/R5
+				uxxx[i][j][k]=((5.0*dx[i]*dx[j]*dx[k])/R2-kr[i,j]*dx[k]-kr[i,k]*dx[j]-kr[j,k]*dx[i])*3.0*K/R5
+		uxxx[2][j][k]=((5.0*dx[j]*dx[k])/R2-kr[j,k])*3.0*K*dx[2]/R5
+	# import matplotlib.pyplot as plt
+	# fig = plt.figure()
+	# fa1 = fig.add_subplot(131)
+	# fa1.imshow(uxx[0][0])
+	# fa2 = fig.add_subplot(132)
+	# fa2.imshow(uxx[0][1])
+	# fa3 = fig.add_subplot(133)
+	# fa3.imshow(uxx[1][1])
+	# plt.show()
 	return (ux,uxx,uxxx)
 	
 	# u1=dx*K/R3
