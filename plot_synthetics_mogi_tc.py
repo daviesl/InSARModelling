@@ -247,12 +247,12 @@ radius= 71.884
 
 modeltype='Mogi'
 
-#import pickle
-#import theano.tensor as T
-#import seaborn as sns
-#import pymc3 as pm
+import pickle
+import theano.tensor as T
+import seaborn as sns
+import pymc3 as pm
 
-#trace = pickle.load(open("trace.p","rb"))
+trace = pickle.load(open("trace.p","rb"))
 
 if modeltype=='Yang':
 	# last Yang
@@ -272,6 +272,17 @@ else:
 	y0 = 14572321.053  #   0.568            0.005            [14572319.977, 14572322.201]
 	z0 = 400 #z0 = 465.648       #   0.540            0.004            [464.592, 466.715]
 	radius = 55 #radius = 71.884    #       0.018            0.000            [71.848, 71.918]
+	
+	y0 = 14571483.34364429
+	x0 = 505617.93041414727
+	radius = 40.40458175094517
+	z0 = 1466.335366313062
+
+	x0 = 506120    #   0.637            0.005            [506364.907, 506367.379]
+	y0 = 14572300  #   0.568            0.005            [14572319.977, 14572322.201]
+	z0 = 710
+	radius = 50
+
 	#print "{'y0': array(14572347.107446698), 'x0': array(506379.4341817431), 'radius': array(70.35783911344616), 'z0': array(455.17884772392574)}" # 
 	#print(pm.summary(trace)) 
 	#argmaxlike = trace.get_values('like',burn=2000).argmax()
@@ -340,7 +351,9 @@ else:
 		return np.exp(-( (d-mu)**2 / ( 2.0 * sigma**2 ) ) )
 	
 	#dem_D_utm = np.ones_like(dem_D_utm)
+
 	foxyminx = min(dem_D_utm.shape[1],dem_D_utm.shape[0])
+
 	#dem_D_utm = np.zeros_like(dem_D_utm)
 	# roffl = int((dem_D_utm.shape[0]-foxyminx)/2)
 	# coffl = int((dem_D_utm.shape[1]-foxyminx)/2)
@@ -348,14 +361,16 @@ else:
 	# coffr = dem_D_utm.shape[1]-coffl-foxyminx
 	# print(roffl,roffr,coffl,coffr)
 	# print dem_D_utm.shape
-	dem_D_utm = makegaussian(foxyminx,foxyminx,1.0,0.0) * 500
+
+	#dem_D_utm = makegaussian(foxyminx,foxyminx,1.0,0.0) * 500
+
 	# compare
-	fig = plt.figure()
-	fa1 = fig.add_subplot(211)
-	fa1.imshow(dem_D)
-	fa2 = fig.add_subplot(212)
-	fa2.imshow(dem_D_utm)
-	plt.show()
+	#fig = plt.figure()
+	#fa1 = fig.add_subplot(211)
+	#fa1.imshow(dem_D)
+	#fa2 = fig.add_subplot(212)
+	#fa2.imshow(dem_D_utm)
+	#plt.show()
 	
 	(dem_dE, dem_dN, dem_dZ) = mogi.mogiTopoCorrected(x0,y0,z0,radius,demEE.reshape(gridshape),demNN.reshape(gridshape),dem_D_utm,deltaEN)
 	#print dem_dE
@@ -383,9 +398,9 @@ else:
 	print (demN.min(),demN.max())
 	print (T025D_utmloc[:,0].min(),T025D_utmloc[:,0].max())
 	print (T025D_utmloc[:,1].min(),T025D_utmloc[:,1].max())
-	utm_synthetic_dE = RegularGridInterpolator((demE,demN),dem_dE.T)
-	utm_synthetic_dN = RegularGridInterpolator((demE,demN),dem_dN.T)
-	utm_synthetic_dZ = RegularGridInterpolator((demE,demN),dem_dZ.T)
+	utm_synthetic_dE = RegularGridInterpolator((demE,demN),dem_dE.T,method='linear',bounds_error=False,fill_value=0)
+	utm_synthetic_dN = RegularGridInterpolator((demE,demN),dem_dN.T,method='linear',bounds_error=False,fill_value=0)
+	utm_synthetic_dZ = RegularGridInterpolator((demE,demN),dem_dZ.T,method='linear',bounds_error=False,fill_value=0)
 	#utm_synthetic_dE = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dE).T)
 	#utm_synthetic_dN = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dN).T)
 	#utm_synthetic_dZ = RegularGridInterpolator((demE,np.flipud(demN)),np.flipud(dem_dZ).T)
