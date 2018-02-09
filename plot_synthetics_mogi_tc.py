@@ -252,7 +252,7 @@ import theano.tensor as T
 import seaborn as sns
 import pymc3 as pm
 
-trace = pickle.load(open("trace.p","rb"))
+trace = pickle.load(open("trace_smc5.p","rb"))
 
 if modeltype=='Yang':
 	# last Yang
@@ -284,12 +284,20 @@ else:
 	radius = 50
 
 	#print "{'y0': array(14572347.107446698), 'x0': array(506379.4341817431), 'radius': array(70.35783911344616), 'z0': array(455.17884772392574)}" # 
-	#print(pm.summary(trace)) 
-	#argmaxlike = trace.get_values('like',burn=2000).argmax()
-	#x0 = trace.get_values('x0',burn=2000)[argmaxlike]
-	#y0 = trace.get_values('y0',burn=2000)[argmaxlike]
-	#z0 = trace.get_values('z0',burn=2000)[argmaxlike]
-	#radius = trace.get_values('radius',burn=2000)[argmaxlike]
+	print(pm.summary(trace)) 
+	burnin = 0 # 200
+	if True:
+		argmaxlike = trace.get_values('like',burn=burnin).argmax()
+		x0 = trace.get_values('x0',burn=burnin)[argmaxlike]
+		y0 = trace.get_values('y0',burn=burnin)[argmaxlike]
+		z0 = trace.get_values('z0',burn=burnin)[argmaxlike]
+		radius = trace.get_values('radius',burn=burnin)[argmaxlike]
+	else:
+		x0 = np.median(trace.get_values('x0',burn=burnin))
+		y0 = np.median(trace.get_values('y0',burn=burnin))
+		z0 = np.median(trace.get_values('z0',burn=burnin))
+		radius = np.median(trace.get_values('radius',burn=burnin))
+	
 	print "y0: %f x0: %f radius %f z0 %f"%(y0,x0,radius,z0)
 
 x0ll, y0ll = pyproj.transform(utm,wgs,x0,y0)
@@ -302,9 +310,9 @@ if modeltype=='Yang':
 	(T130A_dE, T130A_dN, T130A_dZ) = yangmodel(x0,y0,z0,semimajor,aspectratio,DP_mu,mu,nu,theta,phi,T130A_E_utm,T130A_N_utm,dem_T130A)
 else:
 	import mogi
-	#(T025D_dE, T025D_dN, T025D_dZ) = mogiTopoCorrected(x0,y0,z0,radius,T025D_E_utm,T025D_N_utm,dem_T025D)
-	#(T131A_dE, T131A_dN, T131A_dZ) = mogiTopoCorrected(x0,y0,z0,radius,T131A_E_utm,T131A_N_utm,dem_T131A)
-	#(T130A_dE, T130A_dN, T130A_dZ) = mogiTopoCorrected(x0,y0,z0,radius,T130A_E_utm,T130A_N_utm,dem_T130A)
+	#(T025D_dE, T025D_dN, T025D_dZ) = mogiTopoCorrection(x0,y0,z0,radius,T025D_E_utm,T025D_N_utm,dem_T025D)
+	#(T131A_dE, T131A_dN, T131A_dZ) = mogiTopoCorrection(x0,y0,z0,radius,T131A_E_utm,T131A_N_utm,dem_T131A)
+	#(T130A_dE, T130A_dN, T130A_dZ) = mogiTopoCorrection(x0,y0,z0,radius,T130A_E_utm,T130A_N_utm,dem_T130A)
 	""" Interpolate a UTM grid from the above DEM"""
 	""" First get range of utm coords, 
 	    then interp using 7.5m grid spacing """
@@ -327,7 +335,7 @@ else:
 	min_N = min_No - addN
 	max_N = max_No + addN
 	# Grid it
-	gridspacing = 512
+	gridspacing = 128 
 	deltaEN = smallestd / gridspacing 
 	print (min_E,max_E,max_E-min_E)
 	print (min_N,max_N,max_N-min_N)
@@ -372,7 +380,11 @@ else:
 	#fa2.imshow(dem_D_utm)
 	#plt.show()
 	
-	(dem_dE, dem_dN, dem_dZ) = mogi.mogiTopoCorrected(x0,y0,z0,radius,demEE.reshape(gridshape),demNN.reshape(gridshape),dem_D_utm,deltaEN)
+	mogi.add(T025D_E_utm, T025D_N_utm, dem_T025D, T025D[:,8], T025D[:,9], T025D[:,10], T025D[:,5], T025D[:,6])
+	mogi.add(T131A_E_utm, T131A_N_utm, dem_T131A, T131A[:,8], T131A[:,9], T131A[:,10], T131A[:,5], T131A[:,6])
+	#mogi.add(T130A_E_utm, T130A_N_utm, dem_T130A, T130A[:,8], T130A[:,9], T130A[:,10], T130A[:,5], T130A[:,6])
+	mogi.setDEM(dem_D,par_D,gridspacing,100) # 100m padding
+	(dem_dE, dem_dN, dem_dZ) = mogi.mogiTopoCorrection(x0,y0,z0,radius,demEE.reshape(gridshape),demNN.reshape(gridshape),dem_D_utm,deltaEN,True)
 	#print dem_dE
 	#print dem_dN
 	#print dem_dZ
@@ -629,10 +641,10 @@ def crediblejointplot(x,y,xlabel,ylabel,clr,aspectequal=False):
 		ax.set_aspect('equal')
 	plt.show()
 
-z0raw = trace.get_values('z0', burn=2000)
-x0raw = trace.get_values('x0', burn=2000)
-y0raw = trace.get_values('y0', burn=2000)
-radiusraw = trace.get_values('radius', burn=2000)
+z0raw = trace.get_values('z0', burn=burnin)
+x0raw = trace.get_values('x0', burn=burnin)
+y0raw = trace.get_values('y0', burn=burnin)
+radiusraw = trace.get_values('radius', burn=burnin)
 
 crediblejointplot(radiusraw,z0raw,r"Radius $m$",r"Depth $m$",'c')
 crediblejointplot(x0raw-x0raw.mean(),y0raw-y0raw.mean(),r"Easting Offset$m$",r"Northing Offset $m$",'c',True)

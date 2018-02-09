@@ -131,6 +131,8 @@ from pymc3.step_methods import smc
 import pyproj
 import pandas as pd
 
+print "Using PyMC3 version " + str(pm.__version__)
+
 wgs = pyproj.Proj(init="EPSG:4326")
 utm = pyproj.Proj("+proj=utm +zone="+str(long2UTM(ld[0]))+", +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
 
@@ -160,34 +162,34 @@ with basic_model:
 	mogi.useTheano()
 	mogi.add(T025D_E_utm, T025D_N_utm, dem_T025D, T025D[:,8], T025D[:,9], T025D[:,10], T025D[:,5], T025D[:,6])
 	mogi.add(T131A_E_utm, T131A_N_utm, dem_T131A, T131A[:,8], T131A[:,9], T131A[:,10], T131A[:,5], T131A[:,6])
-	#mogi.add(T130A_E_utm, T130A_N_utm, dem_T130A, T130A[:,8], T130A[:,9], T130A[:,10], T130A[:,5], T130A[:,6])
+	mogi.add(T130A_E_utm, T130A_N_utm, dem_T130A, T130A[:,8], T130A[:,9], T130A[:,10], T130A[:,5], T130A[:,6])
 	mogi.setDEM(dem_D,par_D,128,100) # 100m padding
 
 	llk = pm.DensityDist('llk',mogi.logpgridinterpolate,observed={'x0':x0,'y0':y0,'z0':z0,'radius':radius})
 	#llk = pm.Potential('llk',logp(x0,y0,z0,radius))
 
-	niter = 5000
+	niter = 2000
 
-	start = pm.find_MAP(model=basic_model)
+	#start = pm.find_MAP(model=basic_model)
 	
-	print("Maximum a-posteriori estimate:") 
-	print(start)
+	#print("Maximum a-posteriori estimate:") 
+	#print(start)
 	
-	#n_chains = 200
-	#n_steps = 50
-	#tune_interval = 10
-	#n_jobs = 1
-	#trace = smc.sample_smc(
-	#	n_steps=n_steps,
-	#	n_chains=n_chains,
-	#	tune_interval=tune_interval,
-	#	n_jobs=n_jobs,
-	#	#start=start,
-	#	progressbar=True,
-	#	stage=0,
-	#	homepath=test_folder,
-	#	model=basic_model
-	#	)
+	n_chains = 256
+	n_steps = 8
+	tune_interval = 8
+	n_jobs = 1
+	trace = smc.sample_smc(
+		n_steps=n_steps,
+		n_chains=n_chains,
+		tune_interval=tune_interval,
+		#start=start,
+		progressbar=True,
+		stage=0,
+		n_jobs=n_jobs,
+		homepath=test_folder,
+		model=basic_model
+		)
 
 	#t = trace[niter//2:] # discard 50% of values
 	#print t
@@ -197,11 +199,11 @@ with basic_model:
 	#trace = pm.sample(niter, start = start, step = step)
 
 	#step = pm.NUTS()
-	#trace = pm.sample(niter, step = step, tune=2000)
+	#trace = pm.sample(niter, step = step, tune=2000, cores=4)
 
 	# Metropolis hastings
-	step = pm.Metropolis()
-	trace = pm.sample(niter, step = step, tune=2000)
+	#step = pm.Metropolis()
+	#trace = pm.sample(niter, step = step, tune=2000)
 
 	#fig, (ax1,ax2,ax3,ax4) = plt.subplots(4,1,sharex=True)
 	#ax1.plot(trace['x0'])
@@ -211,7 +213,7 @@ with basic_model:
 	#plt.show()
 
 	import pickle
-	pickle.dump(trace,open("trace_metro.p","wb"))
+	pickle.dump(trace,open("trace_smc6.p","wb"))
 
 	pm.traceplot(trace)
 	ax = plt.gca()

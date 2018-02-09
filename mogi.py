@@ -27,6 +27,15 @@ utm_N = 0
 utm_EE = 0
 utm_NN = 0
 
+# granite
+Vs = 2500 
+nu = 0.25 
+rho = 2500
+Vp = Vs * math.sqrt((2.0*nu-2.0)/(2.0*nu-1.0))
+mu = Vs**2 * rho 
+lam = Vp**2 * rho - 2 * mu
+P0 = mu / (1 - nu)
+
 def add(E_utm,N_utm,DEM,uE,uN,uZ,dLOS,sigma):
 	global observeddata
 	observeddata.append(Observed(E_utm,N_utm,DEM,uE,uN,uZ,dLOS,sigma))
@@ -155,9 +164,28 @@ def npifft2(A):
 	S = s//2 + 1
 	return npfft.irfftn(A[:,:S]) #,A.shape)
 
-
 # Theano version
 def Tfft2(a):
+	""" assumes len(a.shape)==2, does not assert this """
+	#A = np.zeros_like(a,dtype=np.complex_)
+	s = a.shape[0]
+	S = s//2+1
+	#aa = T.stack([a],axis=0)
+	aa = a.reshape((1,a.shape[0],a.shape[1]))
+	AA = Tfft.rfft(aa)
+	B = AA[...,0] + 1.j * AA[...,1] # Theano rfft stores complex values in separate array 
+	# get first output
+	C = B[0,...]
+	CC = C[:,1:S-1]
+	A = T.zeros_like(a)
+	Afront = A[:,:S]
+	A = T.set_subtensor(Afront,C)
+	Aback = A[:,S:]
+	A = T.set_subtensor(Aback,T.conj(Tfftshift(A))[:,S:])
+	return A
+
+# Theano version
+def Tfft2old(a):
 	""" assumes len(a.shape)==2, does not assert this """
 	#A = np.zeros_like(a,dtype=np.complex_)
 	s = a.shape[1]
@@ -185,14 +213,19 @@ def Tfft2(a):
 
 # Theano version
 def Tifft2(A):
-	s = A.shape[0]
+	s = A.shape[1]
 	S = s//2 + 1
 	#B = T.tensor3() # np.zeros((s,S,2),dtype=np.float_)
 	#B[:,:,0] = T.real(A)
 	#B[:,:,1] = T.imag(A)
-	B = T.stack([T.real(A[:,:S]),T.imag(A[:,:S])],axis=2)
-	BB = T.stack([B],axis=0)
-	return Tfft.irfft(BB)[0,...] #,A.shape)
+	B = T.zeros((1,A.shape[1],S,2))
+	Breal = B[0,:,:,0]
+	B = T.set_subtensor(Breal,T.real(A[:,:S]))
+	Bimag = B[0,:,:,1]
+	B = T.set_subtensor(Bimag,T.imag(A[:,:S]))
+	#B = T.stack([T.real(A[:,:S]),T.imag(A[:,:S])],axis=2)
+	#BB = T.stack([B],axis=0)
+	return Tfft.irfft(B)[0,:,:] #,A.shape)
 
 def Tfftshift(x):
 	xb = x
@@ -208,19 +241,12 @@ def Tifftshift(x):
 		xb = T.roll(xb,shift,a)	
 	return xb
 
-def mogiTopoCorrected(x0,y0,z0,radius,x,y,refdem,spacing):
+def mogiTopoCorrection(x0,y0,z0,radius,x,y,refdem,spacing,include_zeroth_order=False):
 	"""
 	Assumes x,y are equivalent to np.meshgrid(easting,northing) for all coordinates in the refdem.
 	All expressions are taken from Williams and Wadge (2000)
+	This method applies the first order topography correction using a uniform meshgrid x,y as input.
 	"""
-	# granite
-	Vs = 2500 
-	nu = 0.25 
-	rho = 2500
-	Vp = Vs * math.sqrt((2.0*nu-2.0)/(2.0*nu-1.0))
-	mu = Vs**2 * rho 
-	lam = Vp**2 * rho - 2 * mu
-	P0 = mu / (1 - nu)
 	(ux,uxx,uxxx) = mogiZerothOrder(x0,y0,z0,radius,mu,nu,P0,x,y)
 	nx = refdem.shape[1]
 	ny = refdem.shape[0]
@@ -277,8 +303,10 @@ def mogiTopoCorrected(x0,y0,z0,radius,x,y,refdem,spacing):
 	#U2 = -1.0j * (F22tt * G[1][1] )
 	#U3 = -1.0j * (F22tt * G[1][2] )
 	#return (ux[0],ux[1],ux[2])
-	return (ux[0] + ifft2(U1), ux[1] + ifft2(U2), ux[2] + ifft2(U3))
-	#return (ifft2(U1),ifft2(U2),ifft2(U3))
+	if include_zeroth_order:
+		return (ux[0] + ifft2(U1), ux[1] + ifft2(U2), ux[2] + ifft2(U3))
+	else:
+		return (ifft2(U1),ifft2(U2),ifft2(U3))
 	#return (ifft2(fft2(s11)*ss),ifft2(fft2(s22)*tt),ifft2(fft2(s12)*ss))
 
 # Pre-compute the Greens functions ffts for the DEM
@@ -384,25 +412,27 @@ def mogiDEMGBIS(x0,y0,z0,radius,x,y,dem):
 	
 	return (ddx,ddy,ddz)
 
-def gridsynthetic(x0,y0,z0,radius):
-	#utm_dem
-	#utm_EE
-	#utm_NN
-	#import matplotlib.pyplot as plt
-	#plt.figure()
-	#plt.imshow(utm_dem)
-	#plt.show()
-	#plt.figure()
-	#plt.imshow(utm_EE)
-	#plt.show()
-	return mogiTopoCorrected(x0,y0,z0,radius,utm_EE,utm_NN,utm_dem,1.0) # last arg is unity spacing.
+#def gridsynthetic(x0,y0,z0,radius):
+#	#utm_dem
+#	#utm_EE
+#	#utm_NN
+#	#import matplotlib.pyplot as plt
+#	#plt.figure()
+#	#plt.imshow(utm_dem)
+#	#plt.show()
+#	#plt.figure()
+#	#plt.imshow(utm_EE)
+#	#plt.show()
+#	return mogiTopoCorrection(x0,y0,z0,radius,utm_EE,utm_NN,utm_dem,1.0,False) # second last arg is unity spacing.
 	
-def logpobinterpolate(dEf,dNf,dZf,ob):
-	dE = dEf(np.column_stack((ob.E_utm,ob.N_utm))).max()
-	dN = dNf(np.column_stack((ob.E_utm,ob.N_utm)))
-	dZ = dZf(np.column_stack((ob.E_utm,ob.N_utm)))
+def obinterpolate(dEf,dNf,dZf,ob):
+	dEi = dEf(np.column_stack((ob.E_utm,ob.N_utm)))
+	dNi = dNf(np.column_stack((ob.E_utm,ob.N_utm)))
+	dZi = dZf(np.column_stack((ob.E_utm,ob.N_utm)))
+	return (dEi,dNi,dZi)
+
+def logpob(dE,dN,dZ,ob):
 	return (((((ob.uE*dE + ob.uN*dN + ob.uZ*dZ) - ob.dLOS) / ob.sigma)**2).sum())
-	#return (((( ob.dLOS) / ob.sigma)**2).sum())
 
 #Numpy
 def npgridinterp(coordgrid,A):
@@ -443,16 +473,23 @@ def Tgridinterp(coordgrid,A):
 def logpgridinterpolate(x0,y0,z0,radius):
 	global utm_E
 	global utm_N
+	global utm_EE
+	global utm_NN
 	ll = 0
-	dE,dN,dZ = gridsynthetic(x0,y0,z0,radius)
-	#dEf = RegularGridInterpolator((utm_E,utm_N),dE.T)
-	#dNf = RegularGridInterpolator((utm_E,utm_N),dN.T)
-	#dZf = RegularGridInterpolator((utm_E,utm_N),dZ.T)
+	#dE,dN,dZ = gridsynthetic(x0,y0,z0,radius)
+	dE,dN,dZ = mogiTopoCorrection(x0,y0,z0,radius,utm_EE,utm_NN,utm_dem,1.0,False) # second last arg is unity spacing.
 	dEf = Tgridinterp((utm_E,utm_N),dE.T)
 	dNf = Tgridinterp((utm_E,utm_N),dN.T)
 	dZf = Tgridinterp((utm_E,utm_N),dZ.T)
 	for o in observeddata:
-		ll += logpobinterpolate(dEf,dNf,dZf,o)
+		# interpolate first order correction
+		dE1, dN1, dZ1 = obinterpolate(dEf,dNf,dZf,o)
+		# Compute zeroth order correction more precisely using utm coordinates instead of interpolation
+		(ux,uxx,uxxx) = mogiZerothOrder(x0,y0,z0,radius,mu,nu,P0,o.E_utm,o.N_utm)
+		dEc = ux[0]+dE1
+		dNc = ux[1]+dN1
+		dZc = ux[2]+dZ1
+		ll += logpob(dEc,dNc,dZc,o)
 	return ll * (-0.5)
 
 def synthetic(x0,y0,z0,radius,ob):
@@ -537,6 +574,35 @@ def test_fft_numpy_equals_theano():
 	plt.colorbar(cfa2, ax=fa2)
 	plt.colorbar(cfa3, ax=fa3)
 	plt.show()
+
+	# Test interpolation	
+	a = np.linspace(0.0,1.0,512)
+	dsto = 61
+	b = np.linspace(0.0,1.0,dsto) # a prime number
+	xx,yy = np.meshgrid(a,a)
+	xxyy = xx*yy + (1-xx)*(1-yy)
+	bx,by = np.meshgrid(b,b)
+	ftgi = Tgridinterp((a,a),xxyy)
+	fnpgi = npgridinterp((a,a),xxyy)
+	bxby = np.column_stack((bx.flatten(),by.flatten()))
+	tgi = ftgi(bxby).reshape((dsto,dsto))
+	npgi = fnpgi(bxby).reshape((dsto,dsto))
+	fig = plt.figure()
+	fa1 = fig.add_subplot(141)
+	cfa1 = fa1.imshow(tgi)
+	fa2 = fig.add_subplot(142)
+	cfa2 = fa2.imshow(npgi)
+	fa3 = fig.add_subplot(143)
+	cfa3 = fa3.imshow(tgi-npgi)
+	fa4 = fig.add_subplot(144)
+	cfa4 = fa4.imshow(xxyy)
+	plt.colorbar(cfa1, ax=fa1)
+	plt.colorbar(cfa2, ax=fa2)
+	plt.colorbar(cfa3, ax=fa3)
+	plt.colorbar(cfa4, ax=fa4)
+	plt.show()
+	
+	
 	
 	
 	
