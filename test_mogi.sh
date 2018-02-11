@@ -8,6 +8,4 @@ module load gdal/1.11.1-python
 
 export MKL_THREADING_LAYER=GNU
 export LD_PRELOAD=/usr/lib64/libgomp.so.1
-#env MKL_THREADING_LAYER=GNU python plot_synthetics_yang.py
-#env MKL_THREADING_LAYER=GNU python plot_synthetics_2016.py
-env MKL_THREADING_LAYER=GNU python plot_synthetics_mogi_tc.py
+env MKL_THREADING_LAYER=GNU python mogi.py

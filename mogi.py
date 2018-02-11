@@ -412,19 +412,6 @@ def mogiDEMGBIS(x0,y0,z0,radius,x,y,dem):
 	
 	return (ddx,ddy,ddz)
 
-#def gridsynthetic(x0,y0,z0,radius):
-#	#utm_dem
-#	#utm_EE
-#	#utm_NN
-#	#import matplotlib.pyplot as plt
-#	#plt.figure()
-#	#plt.imshow(utm_dem)
-#	#plt.show()
-#	#plt.figure()
-#	#plt.imshow(utm_EE)
-#	#plt.show()
-#	return mogiTopoCorrection(x0,y0,z0,radius,utm_EE,utm_NN,utm_dem,1.0,False) # second last arg is unity spacing.
-	
 def obinterpolate(dEf,dNf,dZf,ob):
 	dEi = dEf(np.column_stack((ob.E_utm,ob.N_utm)))
 	dNi = dNf(np.column_stack((ob.E_utm,ob.N_utm)))
@@ -439,8 +426,8 @@ def npgridinterp(coordgrid,A):
 	return RegularGridInterpolator(coordgrid,A)
 
 def Tgridinterp(coordgrid,A):
-	""" Makes a lot of assumptions
-	    1. Linearly spaced grid
+	""" Performs a vectorised bilinear interpolation
+	    Assumes equi-linearly spaced coordgrid
 	"""
 	dx = coordgrid[0][1]-coordgrid[0][0]
 	dy = coordgrid[1][1]-coordgrid[1][0]
@@ -460,11 +447,6 @@ def Tgridinterp(coordgrid,A):
 		print len(xl)
 		print xu 
 		print yu 
-		#xlyl = np.column_stack((xl,yl))
-		#xuyl = np.column_stack((xu,yl))
-		#xlyu = np.column_stack((xl,yu))
-		#xuyu = np.column_stack((xu,yu))
-		#return (1-ay) * ((1-ax) * A[xlyl] + ax * A[xuyl]) + ay * ((1-ax) * A[xlyu] + ax * A[xuyu])
 		val = (1-ay) * ((1-ax) * A[xl,yl] + ax * A[xu,yl]) + ay * ((1-ax) * A[xl,yu] + ax * A[xu,yu])
 		return val
 	return bilinear

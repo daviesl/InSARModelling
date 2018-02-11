@@ -252,7 +252,7 @@ import theano.tensor as T
 import seaborn as sns
 import pymc3 as pm
 
-trace = pickle.load(open("trace_smc5.p","rb"))
+trace = pickle.load(open("trace_smc6.p","rb"))
 
 if modeltype=='Yang':
 	# last Yang
