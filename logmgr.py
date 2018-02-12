@@ -28,6 +28,9 @@ def logger(name,level='INFO'):
         if name == 'varres':
             logger.info('varrespy - v 1.0')
             logger.info('----------------')
+        elif name == 'pymode':
+            logger.info('pymode - v 1.0')
+            logger.info('----------------')
     else:
         ch = logger.handlers[0]
         if level in 'DEBUG':
