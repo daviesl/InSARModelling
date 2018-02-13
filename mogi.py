@@ -314,11 +314,11 @@ def mogiTopoCorrection(x0,y0,z0,radius,x,y,refdem,spacing,include_zeroth_order=F
 # Compute the fi from Appendix 1 using the zeroth order soln (as FFTs)
 # Use A4 and A9 for displacement and displacement gradient ffts
 
-def mogiZerothOrder(x0,y0,z0,radius,mu,nu,P0,x,y):
+def mogiZerothOrder(x0,y0,z0,radius,mu,nu,P0,x,y,z=0):
 	"""evaluate a single Mogi peak over a 2D (2 by N) numpy array of evalpts, where coeffs = (x0,y0,z0,radius)
 	"""
 	#dx = (x - x0,y - y0, np.zeros(x.shape) + z0)
-	dx = (x-x0,y - y0, z0)
+	dx = (x-x0,y - y0, z0-z)
 	K = (P0 * (1 - nu) / mu) * (radius**3) # reduces to radius**3 for granite
 	# or equivalently c= (3/4) a^3 dP / rigidity
 	# where a = sphere radius, dP = delta Pressure
@@ -452,7 +452,7 @@ def Tgridinterp(coordgrid,A):
 	return bilinear
 
 
-def logpgridinterpolate(x0,y0,z0,radius):
+def logpfirstorder(x0,y0,z0,radius):
 	global utm_E
 	global utm_N
 	global utm_EE
@@ -474,14 +474,24 @@ def logpgridinterpolate(x0,y0,z0,radius):
 		ll += logpob(dEc,dNc,dZc,o)
 	return ll * (-0.5)
 
-def synthetic(x0,y0,z0,radius,ob):
-	(dE, dN, dZ) = mogiDEM(x0,y0,z0,radius,ob.E_utm,ob.N_utm,ob.DEM)
-	return (((((ob.uE*dE + ob.uN*dN + ob.uZ*dZ) - ob.dLOS) / ob.sigma)**2).sum())
+#def synthetic(x0,y0,z0,radius,ob):
+#	(dE, dN, dZ) = mogiDEM(x0,y0,z0,radius,ob.E_utm,ob.N_utm,ob.DEM)
+#	return (((((ob.uE*dE + ob.uN*dN + ob.uZ*dZ) - ob.dLOS) / ob.sigma)**2).sum())
 	
-def logp(x0,y0,z0,radius):
+def logpvaryingdepth(x0,y0,z0,radius):
 	ll = 0
 	for o in observeddata:
-		ll += synthetic(x0,y0,z0,radius,o)
+		(ux,uxx,uxxx) = mogiZerothOrder(x0,y0,z0,radius,mu,nu,P0,o.E_utm,o.N_utm,o.DEM)
+		ll += logpob(ux[0],ux[1],ux[2],o)
+		#ll += synthetic(x0,y0,z0,radius,o)
+	return ll * (-0.5) 
+
+def logpreferencelevel(x0,y0,z0,radius):
+	ll = 0
+	for o in observeddata:
+		(ux,uxx,uxxx) = mogiZerothOrder(x0,y0,z0,radius,mu,nu,P0,o.E_utm,o.N_utm)
+		ll += logpob(ux[0],ux[1],ux[2],o)
+		#ll += synthetic(x0,y0,z0,radius,o)
 	return ll * (-0.5) 
 
 	
